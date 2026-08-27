@@ -29,6 +29,7 @@ public class ResultsTablePanel extends JPanel {
 
     private static final Color COLOR_LEXICO = new Color(0xCE, 0x91, 0x78);
     private static final Color COLOR_SINTACTICO = new Color(0xF4, 0x47, 0x47);
+    private static final Color COLOR_SEMANTICO = new Color(0xD7, 0xBA, 0x7D);
 
     private final JLabel lblStatusBanner;
     private final DefaultTableModel tableModel;
@@ -152,6 +153,8 @@ public class ResultsTablePanel extends JPanel {
                         c.setForeground(COLOR_LEXICO);
                     } else if ("SINTÁCTICO".equals(value)) {
                         c.setForeground(COLOR_SINTACTICO);
+                    } else if ("SEMÁNTICO".equals(value)) {
+                        c.setForeground(COLOR_SEMANTICO);
                     } else {
                         c.setForeground(COLOR_TEXT);
                     }
@@ -194,7 +197,7 @@ public class ResultsTablePanel extends JPanel {
         tableModel.setRowCount(0);
         for (AnalysisError err : errores) {
             tableModel.addRow(new Object[]{
-                    err.tipo() == TipoError.LEXICO ? "LÉXICO" : "SINTÁCTICO",
+                    tipoVisible(err.tipo()),
                     err.linea(),
                     err.columna(),
                     err.simbolo() == null || err.simbolo().isEmpty() ? "<desconocido>" : err.simbolo(),
@@ -204,10 +207,11 @@ public class ResultsTablePanel extends JPanel {
 
         long lexCount = errores.stream().filter(e -> e.tipo() == TipoError.LEXICO).count();
         long synCount = errores.stream().filter(e -> e.tipo() == TipoError.SINTACTICO).count();
+        long semCount = errores.stream().filter(e -> e.tipo() == TipoError.SEMANTICO).count();
 
         lblStatusBanner.setText(String.format(
-                "[ERROR] Se encontraron %d error(es) en el archivo (%d léxico(s), %d sintáctico(s)).",
-                errores.size(), lexCount, synCount
+                "[ERROR] Se encontraron %d error(es) en el archivo (%d léxico(s), %d sintáctico(s), %d semántico(s)).",
+                errores.size(), lexCount, synCount, semCount
         ));
         lblStatusBanner.setBackground(BANNER_ERROR_BG);
         lblStatusBanner.setForeground(BANNER_ERROR_FG);
@@ -230,5 +234,13 @@ public class ResultsTablePanel extends JPanel {
 
     public JTable getTable() {
         return table;
+    }
+
+    private String tipoVisible(TipoError tipo) {
+        return switch (tipo) {
+            case LEXICO -> "LÉXICO";
+            case SINTACTICO -> "SINTÁCTICO";
+            case SEMANTICO -> "SEMÁNTICO";
+        };
     }
 }
