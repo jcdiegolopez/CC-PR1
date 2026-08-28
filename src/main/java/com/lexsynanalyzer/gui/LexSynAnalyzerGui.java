@@ -5,9 +5,9 @@ import com.lexsynanalyzer.analyzer.LexSynAnalyzer;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.BadLocationException;
 import java.awt.*;
 import java.awt.event.InputEvent;
@@ -37,6 +37,8 @@ public class LexSynAnalyzerGui extends JFrame {
     private final JTextArea editorArea;
     private final JTextArea lineNumbersArea;
     private final ResultsTablePanel resultsPanel;
+    private final SyntaxTreePanel syntaxTreePanel;
+    private final JTabbedPane tabbedPane;
     private final JButton btnAbrir;
     private final JButton btnGuardar;
     private final JButton btnAnalizar;
@@ -48,8 +50,12 @@ public class LexSynAnalyzerGui extends JFrame {
     private boolean hasUnsavedChanges;
 
     public LexSynAnalyzerGui() {
-        super("Compiscript — Analizador Léxico y Sintáctico (ANTLR4)");
+        super("Compiscript — Analizador Léxico, Sintáctico y Semántico (ANTLR4)");
         UIManager.put("Button.disabledText", Color.WHITE);
+        UIManager.put("TabbedPane.selected", COLOR_PANEL);
+        UIManager.put("TabbedPane.background", COLOR_TOOLBAR);
+        UIManager.put("TabbedPane.foreground", COLOR_TEXT);
+        UIManager.put("TabbedPane.contentBorderInsets", new Insets(0, 0, 0, 0));
 
         lblArchivoPath = new JLabel("[ Ningún archivo cargado ]");
         lblArchivoPath.setFont(new Font("Segoe UI", Font.ITALIC, 12));
@@ -127,7 +133,7 @@ public class LexSynAnalyzerGui extends JFrame {
             }
         });
 
-        // 3. Panel de Resultados
+        // 3. Panel de Resultados y Panel del Árbol Sintáctico en JTabbedPane
         resultsPanel = new ResultsTablePanel();
         resultsPanel.getTable().getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -135,13 +141,42 @@ public class LexSynAnalyzerGui extends JFrame {
             }
         });
 
-        // 4. SplitPane Redimensionable (Vertical: Editor arriba, Resultados abajo)
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editorContainer, resultsPanel);
-        splitPane.setDividerLocation(260); // Proporción cómoda para ver bien los resultados
+        syntaxTreePanel = new SyntaxTreePanel();
+
+        tabbedPane = new JTabbedPane();
+        tabbedPane.setUI(new DarkTabbedPaneUI());
+        tabbedPane.setBackground(COLOR_PANEL);
+        tabbedPane.setForeground(COLOR_TEXT);
+        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        tabbedPane.setBorder(BorderFactory.createLineBorder(COLOR_BORDER, 1));
+
+        tabbedPane.addTab("Tabla de Errores y Diagnósticos", resultsPanel);
+        tabbedPane.addTab("Árbol Sintáctico (ParseTree)", syntaxTreePanel);
+
+        // 4. SplitPane Redimensionable (Vertical: Editor arriba, Pestañas abajo)
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editorContainer, tabbedPane);
+        splitPane.setUI(new javax.swing.plaf.basic.BasicSplitPaneUI() {
+            @Override
+            public javax.swing.plaf.basic.BasicSplitPaneDivider createDefaultDivider() {
+                return new javax.swing.plaf.basic.BasicSplitPaneDivider(this) {
+                    @Override
+                    public void setBorder(javax.swing.border.Border b) {
+                        // Eliminar borde 3D resaltado blanco nativo
+                    }
+
+                    @Override
+                    public void paint(Graphics g) {
+                        g.setColor(COLOR_BG);
+                        g.fillRect(0, 0, getWidth(), getHeight());
+                    }
+                };
+            }
+        });
+        splitPane.setDividerLocation(280);
         splitPane.setResizeWeight(0.4);
         splitPane.setBackground(COLOR_BG);
         splitPane.setBorder(new EmptyBorder(8, 8, 8, 8));
-        splitPane.setDividerSize(8);
+        splitPane.setDividerSize(6);
 
         rootPanel.add(splitPane, BorderLayout.CENTER);
 
@@ -191,11 +226,11 @@ public class LexSynAnalyzerGui extends JFrame {
         panel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, COLOR_BORDER));
 
         // Título de la aplicación
-        JLabel lblTitle = new JLabel("  COMPISCRIPT IDE  |  Analizador ANTLR4");
+        JLabel lblTitle = new JLabel("  COMPISCRIPT IDE  |  Analizador Léxico, Sintáctico y Semántico");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
         lblTitle.setForeground(COLOR_TEXT);
 
-        // Toolbar con 3 botones con estilo consistente y tooltips
+        // Toolbar con 4 botones con estilo consistente y tooltips
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 6));
         toolbar.setBackground(COLOR_TOOLBAR);
 
@@ -204,9 +239,9 @@ public class LexSynAnalyzerGui extends JFrame {
         JButton btnSave = crearBoton("Guardar", COLOR_ACCENT, COLOR_ACCENT_HOVER,
                 "Guardar los cambios en el archivo actual (Ctrl+S)");
         JButton btnRun = crearBoton("Analizar", COLOR_ACCENT, COLOR_ACCENT_HOVER,
-                "Ejecutar el análisis léxico y sintáctico sobre el archivo cargado");
+                "Ejecutar el análisis léxico, sintáctico y semántico sobre el archivo cargado");
         JButton btnClear = crearBoton("Limpiar", COLOR_ACCENT, COLOR_ACCENT_HOVER,
-                "Limpiar el editor de código y los resultados");
+                "Limpiar el editor de código, la tabla de resultados y el árbol sintáctico");
 
         btnOpen.setName("Abrir");
         btnSave.setName("Guardar");
@@ -277,6 +312,18 @@ public class LexSynAnalyzerGui extends JFrame {
         return compList;
     }
 
+    public ResultsTablePanel getResultsPanel() {
+        return resultsPanel;
+    }
+
+    public SyntaxTreePanel getSyntaxTreePanel() {
+        return syntaxTreePanel;
+    }
+
+    public JTabbedPane getTabbedPane() {
+        return tabbedPane;
+    }
+
     private void abrirArchivo() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Seleccionar archivo Compiscript (.cps)");
@@ -301,6 +348,7 @@ public class LexSynAnalyzerGui extends JFrame {
                 lblArchivoPath.setText(archivoActual.getName());
                 lblStatusBar.setText(" Archivo cargado: " + archivoActual.getAbsolutePath());
                 resultsPanel.limpiar();
+                syntaxTreePanel.limpiar();
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this, "Error al leer el archivo:\n" + ex.getMessage(),
                         "Error de Lectura", JOptionPane.ERROR_MESSAGE);
@@ -321,7 +369,7 @@ public class LexSynAnalyzerGui extends JFrame {
 
         actualizarEstadoBotonAnalizar(false);
         btnAbrir.setEnabled(false);
-        lblStatusBar.setText(" [BUSY] Ejecutando análisis léxico y sintáctico...");
+        lblStatusBar.setText(" [BUSY] Ejecutando análisis léxico, sintáctico y semántico...");
 
         SwingWorker<AnalysisResult, Void> worker = new SwingWorker<>() {
             @Override
@@ -336,9 +384,18 @@ public class LexSynAnalyzerGui extends JFrame {
                     if (result.exitoso()) {
                         resultsPanel.mostrarExito();
                         lblStatusBar.setText(" [OK] Análisis completado: 0 errores encontrados.");
+                        tabbedPane.setTitleAt(0, "Diagnósticos (0)");
                     } else {
                         resultsPanel.mostrarErrores(result.errores());
                         lblStatusBar.setText(String.format(" [ERROR] Análisis completado: %d errores detectados.", result.errores().size()));
+                        tabbedPane.setTitleAt(0, String.format("Errores (%d)", result.errores().size()));
+                    }
+
+                    if (result.arbol() != null) {
+                        syntaxTreePanel.mostrarArbol(result.arbol(), result.nombresReglas());
+                        tabbedPane.setTitleAt(1, "Árbol Sintáctico (ParseTree)");
+                    } else {
+                        syntaxTreePanel.limpiar();
                     }
                 } catch (InterruptedException | ExecutionException ex) {
                     JOptionPane.showMessageDialog(LexSynAnalyzerGui.this,
@@ -388,6 +445,9 @@ public class LexSynAnalyzerGui extends JFrame {
         editorArea.setText(PLACEHOLDER_TEXT);
         actualizarNumerosDeLinea();
         resultsPanel.limpiar();
+        syntaxTreePanel.limpiar();
+        tabbedPane.setTitleAt(0, "Tabla de Errores y Diagnósticos");
+        tabbedPane.setTitleAt(1, "Árbol Sintáctico (ParseTree)");
         actualizarEstadoBotonAnalizar(false);
         btnGuardar.setEnabled(false);
         lblArchivoPath.setText("[ Ningún archivo cargado ]");
@@ -431,5 +491,69 @@ public class LexSynAnalyzerGui extends JFrame {
             LexSynAnalyzerGui gui = new LexSynAnalyzerGui();
             gui.setVisible(true);
         });
+    }
+
+    private static class DarkTabbedPaneUI extends javax.swing.plaf.basic.BasicTabbedPaneUI {
+        private static final Color TAB_BG = new Color(0x2D, 0x2D, 0x2D);
+        private static final Color TAB_SELECTED_BG = new Color(0x1E, 0x1E, 0x1E);
+        private static final Color TAB_SELECTED_BORDER = new Color(0x1B, 0x6E, 0xC2);
+        private static final Color TAB_BORDER = new Color(0x3C, 0x3C, 0x3C);
+        private static final Color TEXT_COLOR = new Color(0x96, 0x96, 0x96);
+        private static final Color TEXT_SELECTED_COLOR = Color.WHITE;
+
+        @Override
+        protected void installDefaults() {
+            super.installDefaults();
+            tabAreaInsets = new Insets(4, 6, 0, 6);
+            contentBorderInsets = new Insets(0, 0, 0, 0);
+            selectedTabPadInsets = new Insets(0, 0, 0, 0);
+            tabInsets = new Insets(6, 16, 6, 16);
+        }
+
+        @Override
+        protected void paintTabArea(Graphics g, int tabPlacement, int selectedIndex) {
+            g.setColor(new Color(0x25, 0x25, 0x26));
+            g.fillRect(0, 0, tabPane.getWidth(), tabPane.getHeight());
+            super.paintTabArea(g, tabPlacement, selectedIndex);
+        }
+
+        @Override
+        protected void paintTabBackground(Graphics g, int tabPlacement, int tabIndex, int x, int y, int w, int h, boolean isSelected) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            if (isSelected) {
+                g2.setColor(TAB_SELECTED_BG);
+                g2.fillRect(x, y, w, h);
+                // Indicador azul superior estilo VS Code
+                g2.setColor(TAB_SELECTED_BORDER);
+                g2.fillRect(x, y, w, 3);
+            } else {
+                g2.setColor(TAB_BG);
+                g2.fillRect(x, y, w, h);
+            }
+            g2.dispose();
+        }
+
+        @Override
+        protected void paintTabBorder(Graphics g, int tabPlacement, int tabIndex, int x, int y, int w, int h, boolean isSelected) {
+            g.setColor(TAB_BORDER);
+            g.drawRect(x, y, w - 1, h - 1);
+        }
+
+        @Override
+        protected void paintText(Graphics g, int tabPlacement, Font font, FontMetrics metrics, int tabIndex, String title, Rectangle textRect, boolean isSelected) {
+            g.setFont(font);
+            g.setColor(isSelected ? TEXT_SELECTED_COLOR : TEXT_COLOR);
+            g.drawString(title, textRect.x, textRect.y + metrics.getAscent());
+        }
+
+        @Override
+        protected void paintContentBorder(Graphics g, int tabPlacement, int selectedIndex) {
+            // Sin bordes blancos en el contenido
+        }
+
+        @Override
+        protected void paintFocusIndicator(Graphics g, int tabPlacement, Rectangle[] rects, int tabIndex, Rectangle iconRect, Rectangle textRect, boolean isSelected) {
+            // Sin recuadro de foco clásico
+        }
     }
 }

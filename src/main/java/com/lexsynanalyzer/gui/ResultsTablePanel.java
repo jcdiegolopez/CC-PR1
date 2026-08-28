@@ -184,7 +184,7 @@ public class ResultsTablePanel extends JPanel {
 
     public void mostrarExito() {
         tableModel.setRowCount(0);
-        lblStatusBanner.setText("[OK] Archivo analizado correctamente. No se encontraron errores léxicos ni sintácticos.");
+        lblStatusBanner.setText("[OK] Archivo analizado correctamente. No se encontraron errores léxicos, sintácticos ni semánticos.");
         lblStatusBanner.setBackground(BANNER_SUCCESS_BG);
         lblStatusBanner.setForeground(BANNER_SUCCESS_FG);
         lblStatusBanner.setBorder(BorderFactory.createCompoundBorder(
