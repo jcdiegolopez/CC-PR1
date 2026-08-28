@@ -6,9 +6,12 @@ import com.lexsynanalyzer.parser.LexSynAnalyzerParser.AssignExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.AssignmentContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.BaseTypeContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.BlockContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.BreakStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.CallExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ClassDeclarationContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ConstantDeclarationContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ContinueStatementContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.DoWhileStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.EqualityExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ExprNoAssignContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ExpressionContext;
@@ -16,6 +19,7 @@ import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ForStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ForeachStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.FunctionDeclarationContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.IdentifierExprContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.IfStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.IndexExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.LeftHandSideContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.LiteralExprContext;
@@ -28,19 +32,26 @@ import com.lexsynanalyzer.parser.LexSynAnalyzerParser.PrimaryExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ProgramContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.PropertyAssignExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.RelationalExprContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ReturnStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.StatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.SuffixOpContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.SwitchCaseContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.SwitchStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.TernaryExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ThisExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.TryCatchStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.TypeContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.UnaryExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.VariableDeclarationContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.WhileStatementContext;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -61,7 +72,10 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     private final TablaSimbolos tabla = new TablaSimbolos();
     private final ErrorSemanticoReporter reporter;
+    private final Deque<Simbolo> funcionesActivas = new ArrayDeque<>();
     private int bloquesAbiertos;
+    private int ciclosActivos;
+    private int switchesActivos;
 
     public AnalizadorSemantico(ErrorSemanticoReporter reporter) {
         this.reporter = Objects.requireNonNull(reporter);
@@ -97,9 +111,25 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
     /** Registra las declaraciones anticipadas del ámbito y luego recorre sus sentencias. */
     protected void recorrerAmbito(List<StatementContext> statements) {
         registrarDeclaracionesAnticipadas(statements);
+
+        boolean flujoInterrumpido = false;
+        boolean inalcanzableReportado = false;
         for (StatementContext statement : statements) {
+            if (flujoInterrumpido && !inalcanzableReportado) {
+                reportar(statement.getStart(), "Esta sentencia nunca se ejecuta: el flujo ya termina"
+                        + " antes de llegar aquí.");
+                inalcanzableReportado = true;
+            }
             visit(statement);
+            flujoInterrumpido = flujoInterrumpido || interrumpeElFlujo(statement);
         }
+    }
+
+    /** Una sentencia que corta el flujo deja inalcanzable a todo lo que la sigue en su ámbito. */
+    private static boolean interrumpeElFlujo(StatementContext statement) {
+        return statement.returnStatement() != null
+                || statement.breakStatement() != null
+                || statement.continueStatement() != null;
     }
 
     /**
@@ -149,8 +179,68 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     @Override
     public TipoDato visitFunctionDeclaration(FunctionDeclarationContext ctx) {
-        // Los parámetros, el cuerpo y el retorno se validan en la fase de funciones.
+        Token nombre = ctx.Identifier().getSymbol();
+        TipoDato retorno = ctx.type() == null ? TipoDato.VOID : resolverTipo(ctx.type());
+        List<Simbolo.Parametro> parametros = parametrosDe(ctx);
+
+        // El entorno de la función cuelga del entorno donde se declaró: eso es lo que permite
+        // que una función anidada siga viendo las variables de la función que la contiene.
+        entrarBloque("funcion:" + nombre.getText());
+        declararParametros(parametros);
+
+        funcionesActivas.push(Simbolo.funcion(nombre.getText(), parametros, retorno,
+                nombre.getLine(), columna(nombre)));
+        // Un ciclo exterior no alcanza al cuerpo de la función: 'break' y 'continue' no cruzan.
+        int ciclosExteriores = ciclosActivos;
+        int switchesExteriores = switchesActivos;
+        ciclosActivos = 0;
+        switchesActivos = 0;
+
+        recorrerAmbito(ctx.block().statement());
+
+        ciclosActivos = ciclosExteriores;
+        switchesActivos = switchesExteriores;
+        funcionesActivas.pop();
+        tabla.salirEntorno();
+
+        exigirRetornoPresente(ctx, nombre, retorno);
         return TipoDato.VOID;
+    }
+
+    private void declararParametros(List<Simbolo.Parametro> parametros) {
+        for (Simbolo.Parametro parametro : parametros) {
+            Simbolo simbolo = new Simbolo(parametro.nombre(), CategoriaSimbolo.PARAMETRO, parametro.tipo(),
+                    parametro.linea(), parametro.columna(), false, true, List.of(), null);
+            if (!tabla.declarar(simbolo)) {
+                reporter.reportar(parametro.linea(), parametro.columna(), parametro.nombre(),
+                        "El parámetro '" + parametro.nombre() + "' está repetido en la lista de parámetros.");
+            }
+        }
+    }
+
+    /** Una función con tipo de retorno declarado debe tener al menos un 'return' con valor. */
+    private void exigirRetornoPresente(FunctionDeclarationContext ctx, Token nombre, TipoDato retorno) {
+        if (retorno.clase() == TipoDato.Clase.VOID || contieneRetornoConValor(ctx.block())) {
+            return;
+        }
+        reportar(nombre, "La función '" + nombre.getText() + "' declara el tipo de retorno '" + retorno
+                + "', pero ninguna de sus rutas devuelve un valor.");
+    }
+
+    /** Busca un 'return expr' dentro del cuerpo sin descender a funciones o clases anidadas. */
+    private static boolean contieneRetornoConValor(ParseTree nodo) {
+        if (nodo instanceof ReturnStatementContext retorno) {
+            return retorno.expression() != null;
+        }
+        if (nodo instanceof FunctionDeclarationContext || nodo instanceof ClassDeclarationContext) {
+            return false;
+        }
+        for (int i = 0; i < nodo.getChildCount(); i++) {
+            if (contieneRetornoConValor(nodo.getChild(i))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -329,15 +419,31 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
             visit(ctx.assignment());
         }
         visitarCabeceraFor(ctx);
-        visit(ctx.block());
+        visitarCuerpoDeCiclo(ctx.block());
         tabla.salirEntorno();
         return TipoDato.VOID;
     }
 
-    /** Recorre la condición y el avance del {@code for}; la fase de flujo valida la condición. */
+    /**
+     * Recorre la condición y el avance del {@code for}. La gramática permite omitir cualquiera de
+     * las dos, así que la condición se identifica como la expresión anterior al último ';'.
+     */
     protected void visitarCabeceraFor(ForStatementContext ctx) {
-        for (ExpressionContext expresion : ctx.expression()) {
-            visit(expresion);
+        int ultimoPuntoYComa = -1;
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if (ctx.getChild(i) instanceof TerminalNode terminal && ";".equals(terminal.getText())) {
+                ultimoPuntoYComa = i;
+            }
+        }
+
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if (!(ctx.getChild(i) instanceof ExpressionContext expresion)) {
+                continue;
+            }
+            TipoDato tipo = visit(expresion);
+            if (i < ultimoPuntoYComa) {
+                exigirBooleano(tipo, expresion, "La condición del 'for'");
+            }
         }
     }
 
@@ -352,7 +458,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
                 : TipoDato.DESCONOCIDO;
         declararVariable(ctx.Identifier().getSymbol(), tipoElemento, false, true);
 
-        visit(ctx.block());
+        visitarCuerpoDeCiclo(ctx.block());
         tabla.salirEntorno();
         return TipoDato.VOID;
     }
@@ -558,11 +664,63 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     @Override
     public TipoDato visitLeftHandSide(LeftHandSideContext ctx) {
-        TipoDato tipo = visit(ctx.primaryAtom());
-        for (SuffixOpContext sufijo : ctx.suffixOp()) {
-            tipo = aplicarSufijo(tipo, sufijo);
+        List<SuffixOpContext> sufijos = ctx.suffixOp();
+        Token nombre = ctx.primaryAtom() instanceof IdentifierExprContext identificador
+                ? identificador.Identifier().getSymbol()
+                : null;
+
+        TipoDato tipo;
+        int primerSufijoPendiente = 0;
+        if (nombre != null && !sufijos.isEmpty() && sufijos.get(0) instanceof CallExprContext llamada) {
+            tipo = tipoDeLlamada(nombre, llamada);
+            primerSufijoPendiente = 1;
+        } else {
+            tipo = visit(ctx.primaryAtom());
+        }
+
+        for (int i = primerSufijoPendiente; i < sufijos.size(); i++) {
+            tipo = aplicarSufijo(tipo, sufijos.get(i));
         }
         return tipo;
+    }
+
+    /** Valida que el nombre invocado sea una función y que los argumentos calcen con sus parámetros. */
+    private TipoDato tipoDeLlamada(Token nombre, CallExprContext llamada) {
+        Optional<Simbolo> encontrado = tabla.buscar(nombre.getText());
+        if (encontrado.isEmpty()) {
+            visitarArgumentos(llamada);
+            reportar(nombre, "La función '" + nombre.getText() + "' no está declarada en este ámbito.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo simbolo = encontrado.get();
+        if (simbolo.categoria() != CategoriaSimbolo.FUNCION) {
+            visitarArgumentos(llamada);
+            reportar(nombre, "'" + nombre.getText() + "' es " + descripcionCategoria(simbolo.categoria())
+                    + " y no puede invocarse como función.");
+            return TipoDato.ERROR;
+        }
+
+        List<ExpressionContext> argumentos = argumentosDe(llamada);
+        List<TipoDato> tipos = visitarArgumentos(llamada);
+        List<Simbolo.Parametro> parametros = simbolo.parametros();
+
+        if (argumentos.size() != parametros.size()) {
+            reportar(nombre, "La función '" + nombre.getText() + "' espera " + parametros.size()
+                    + " argumento(s), pero se recibieron " + argumentos.size() + ".");
+            return simbolo.tipoRetorno();
+        }
+
+        for (int i = 0; i < parametros.size(); i++) {
+            Simbolo.Parametro parametro = parametros.get(i);
+            exigirAsignable(parametro.tipo(), tipos.get(i), argumentos.get(i), parametro.nombre(),
+                    "El parámetro '" + parametro.nombre() + "' de '" + nombre.getText() + "'");
+        }
+        return simbolo.tipoRetorno();
+    }
+
+    private static List<ExpressionContext> argumentosDe(CallExprContext ctx) {
+        return ctx.arguments() == null ? List.of() : ctx.arguments().expression();
     }
 
     /**
@@ -625,6 +783,112 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
     public TipoDato visitThisExpr(ThisExprContext ctx) {
         // El uso válido de 'this' se valida en la fase de estructuras avanzadas.
         return TipoDato.DESCONOCIDO;
+    }
+
+    // ------------------------------------------------------------------
+    // Control de flujo
+    // ------------------------------------------------------------------
+
+    @Override
+    public TipoDato visitIfStatement(IfStatementContext ctx) {
+        exigirBooleano(visit(ctx.expression()), ctx.expression(), "La condición del 'if'");
+        for (BlockContext bloque : ctx.block()) {
+            visit(bloque);
+        }
+        return TipoDato.VOID;
+    }
+
+    @Override
+    public TipoDato visitWhileStatement(WhileStatementContext ctx) {
+        exigirBooleano(visit(ctx.expression()), ctx.expression(), "La condición del 'while'");
+        visitarCuerpoDeCiclo(ctx.block());
+        return TipoDato.VOID;
+    }
+
+    @Override
+    public TipoDato visitDoWhileStatement(DoWhileStatementContext ctx) {
+        visitarCuerpoDeCiclo(ctx.block());
+        exigirBooleano(visit(ctx.expression()), ctx.expression(), "La condición del 'do-while'");
+        return TipoDato.VOID;
+    }
+
+    @Override
+    public TipoDato visitSwitchStatement(SwitchStatementContext ctx) {
+        TipoDato selector = visit(ctx.expression());
+
+        switchesActivos++;
+        for (SwitchCaseContext caso : ctx.switchCase()) {
+            TipoDato tipoCaso = visit(caso.expression());
+            if (!indeterminado(selector) && !indeterminado(tipoCaso) && !selector.esCompatibleCon(tipoCaso)) {
+                reportar(caso.expression().getStart(), "El valor del 'case' es de tipo '" + tipoCaso
+                        + "' y no puede compararse con el selector, que es de tipo '" + selector + "'.");
+            }
+            entrarBloque("case");
+            recorrerAmbito(caso.statement());
+            tabla.salirEntorno();
+        }
+
+        if (ctx.defaultCase() != null) {
+            entrarBloque("default");
+            recorrerAmbito(ctx.defaultCase().statement());
+            tabla.salirEntorno();
+        }
+        switchesActivos--;
+        return TipoDato.VOID;
+    }
+
+    @Override
+    public TipoDato visitBreakStatement(BreakStatementContext ctx) {
+        if (ciclosActivos == 0 && switchesActivos == 0) {
+            reportar(ctx.getStart(), "'break' solo puede usarse dentro de un ciclo o de un 'switch'.");
+        }
+        return TipoDato.VOID;
+    }
+
+    @Override
+    public TipoDato visitContinueStatement(ContinueStatementContext ctx) {
+        if (ciclosActivos == 0) {
+            reportar(ctx.getStart(), "'continue' solo puede usarse dentro de un ciclo.");
+        }
+        return TipoDato.VOID;
+    }
+
+    @Override
+    public TipoDato visitReturnStatement(ReturnStatementContext ctx) {
+        Simbolo funcion = funcionesActivas.peek();
+        if (funcion == null) {
+            if (ctx.expression() != null) {
+                visit(ctx.expression());
+            }
+            reportar(ctx.getStart(), "'return' solo puede usarse dentro de una función.");
+            return TipoDato.VOID;
+        }
+
+        TipoDato esperado = funcion.tipoRetorno();
+        if (ctx.expression() == null) {
+            if (esperado.clase() != TipoDato.Clase.VOID) {
+                reportar(ctx.getStart(), "La función '" + funcion.nombre() + "' debe devolver un valor de tipo '"
+                        + esperado + "'.");
+            }
+            return TipoDato.VOID;
+        }
+
+        TipoDato valor = visit(ctx.expression());
+        if (esperado.clase() == TipoDato.Clase.VOID) {
+            reportar(ctx.getStart(), "La función '" + funcion.nombre() + "' no declara tipo de retorno,"
+                    + " por lo que no puede devolver un valor.");
+            return TipoDato.VOID;
+        }
+
+        exigirAsignable(esperado, valor, ctx.expression(), funcion.nombre(),
+                "El valor devuelto por '" + funcion.nombre() + "'");
+        return TipoDato.VOID;
+    }
+
+    protected void visitarCuerpoDeCiclo(BlockContext bloque) {
+        ciclosActivos++;
+        visit(bloque);
+        ciclosActivos--;
     }
 
     // ------------------------------------------------------------------
