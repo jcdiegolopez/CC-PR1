@@ -2,6 +2,8 @@ package com.lexsynanalyzer.analyzer;
 
 import com.lexsynanalyzer.parser.LexSynAnalyzerLexer;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser;
+import com.lexsynanalyzer.semantic.AnalizadorSemantico;
+import com.lexsynanalyzer.semantic.ErrorSemanticoReporter;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -17,7 +19,15 @@ import java.util.Map;
 public final class LexSynAnalyzer {
 
     public static AnalysisResult analyze(File archivo) throws IOException {
-        CharStream input = CharStreams.fromPath(archivo.toPath());
+        return analizar(CharStreams.fromPath(archivo.toPath()));
+    }
+
+    /** Analiza código fuente en memoria; útil para pruebas y para el editor de la GUI. */
+    public static AnalysisResult analizarTexto(String codigoFuente) {
+        return analizar(CharStreams.fromString(codigoFuente));
+    }
+
+    private static AnalysisResult analizar(CharStream input) {
         List<AnalysisError> errores = new ArrayList<>();
 
         LexSynAnalyzerLexer lexer = new LexSynAnalyzerLexer(input);
@@ -30,7 +40,13 @@ public final class LexSynAnalyzer {
         parser.addErrorListener(new CapturingErrorListener(
                 TipoError.SINTACTICO, errores, MensajesEspanol::traducirSintactico));
 
-        parser.program();
+        LexSynAnalyzerParser.ProgramContext arbol = parser.program();
+
+        // El análisis semántico solo tiene sentido sobre un árbol completo: si el archivo tiene
+        // errores léxicos o sintácticos, el ParseTree está incompleto y produciría falsos errores.
+        if (errores.isEmpty()) {
+            new AnalizadorSemantico(new ErrorSemanticoReporter(errores)).analizar(arbol);
+        }
 
         return new AnalysisResult(sinDuplicadosYOrdenados(errores));
     }
@@ -38,8 +54,7 @@ public final class LexSynAnalyzer {
     private static List<AnalysisError> sinDuplicadosYOrdenados(List<AnalysisError> errores) {
         Map<String, AnalysisError> unicos = new LinkedHashMap<>();
         for (AnalysisError error : errores) {
-            String clave = error.tipo() + ":" + error.linea() + ":" + error.columna();
-            unicos.putIfAbsent(clave, error);
+            unicos.putIfAbsent(claveDeDuplicado(error), error);
         }
 
         return unicos.values().stream()
@@ -47,6 +62,18 @@ public final class LexSynAnalyzer {
                         .thenComparingInt(AnalysisError::columna)
                         .thenComparing(AnalysisError::tipo))
                 .toList();
+    }
+
+    /**
+     * Los errores léxicos y sintácticos se agrupan por posición porque ANTLR suele emitir varios
+     * mensajes derivados del mismo fallo. Un error semántico, en cambio, es un diagnóstico único:
+     * dos reglas distintas pueden fallar sobre el mismo token y ambas deben mostrarse.
+     */
+    private static String claveDeDuplicado(AnalysisError error) {
+        String posicion = error.tipo() + ":" + error.linea() + ":" + error.columna();
+        return error.tipo() == TipoError.SEMANTICO
+                ? posicion + ":" + error.descripcion()
+                : posicion;
     }
 
     private LexSynAnalyzer() {
