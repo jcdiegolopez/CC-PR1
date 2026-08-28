@@ -48,7 +48,7 @@ public final class LexSynAnalyzer {
             new AnalizadorSemantico(new ErrorSemanticoReporter(errores)).analizar(arbol);
         }
 
-        return new AnalysisResult(sinDuplicadosYOrdenados(errores));
+        return new AnalysisResult(sinDuplicadosYOrdenados(errores), arbol, parser.getRuleNames());
     }
 
     private static List<AnalysisError> sinDuplicadosYOrdenados(List<AnalysisError> errores) {
