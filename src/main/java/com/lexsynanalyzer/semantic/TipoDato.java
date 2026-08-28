@@ -1,6 +1,7 @@
 package com.lexsynanalyzer.semantic;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /** Representa un tipo del sistema de tipos de Compiscript. */
 public final class TipoDato {
@@ -72,6 +73,11 @@ public final class TipoDato {
 
     /** Compatibilidad básica para asignaciones y comparaciones. */
     public boolean esCompatibleCon(TipoDato otro) {
+        return esCompatibleCon(otro, null);
+    }
+
+    /** Compatibilidad considerando la jerarquía de herencia si se proporciona la tabla de símbolos. */
+    public boolean esCompatibleCon(TipoDato otro, TablaSimbolos tabla) {
         if (otro == null || esError() || otro.esError()) {
             return true;
         }
@@ -84,7 +90,36 @@ public final class TipoDato {
         if (otro.clase == Clase.NULL && (clase == Clase.CLASE || clase == Clase.ARREGLO)) {
             return true;
         }
+        if (clase == Clase.ARREGLO && otro.clase == Clase.ARREGLO) {
+            return tipoElemento.esCompatibleCon(otro.tipoElemento, tabla);
+        }
+        if (clase == Clase.CLASE && otro.clase == Clase.CLASE) {
+            if (Objects.equals(nombreClase, otro.nombreClase)) {
+                return true;
+            }
+            if (tabla != null) {
+                return esSubclaseDe(otro.nombreClase, nombreClase, tabla)
+                        || esSubclaseDe(nombreClase, otro.nombreClase, tabla);
+            }
+        }
         return equals(otro);
+    }
+
+    private static boolean esSubclaseDe(String subClase, String superClase, TablaSimbolos tabla) {
+        String actual = subClase;
+        int maxNivel = 100;
+        while (actual != null && maxNivel-- > 0) {
+            Optional<Simbolo> sim = tabla.buscar(actual);
+            if (sim.isEmpty() || sim.get().categoria() != CategoriaSimbolo.CLASE) {
+                break;
+            }
+            String padre = sim.get().clasePadre();
+            if (Objects.equals(padre, superClase)) {
+                return true;
+            }
+            actual = padre;
+        }
+        return false;
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.lexsynanalyzer.parser.LexSynAnalyzerParser.BlockContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.BreakStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.CallExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ClassDeclarationContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ClassMemberContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ConstantDeclarationContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ContinueStatementContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.DoWhileStatementContext;
@@ -30,6 +31,7 @@ import com.lexsynanalyzer.parser.LexSynAnalyzerParser.NewExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ParameterContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.PrimaryExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ProgramContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.PropertyAccessExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.PropertyAssignExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.RelationalExprContext;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ReturnStatementContext;
@@ -57,22 +59,23 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Visitor que recorre el ParseTree de ANTLR y valida el significado del programa.
+ * Visitor que recorre el ParseTree de ANTLR y valida el significado semántico del programa.
  *
  * <p>Cada método {@code visit...} de una expresión devuelve su {@link TipoDato} (atributo
  * sintetizado); el ámbito vigente se mantiene como contexto heredado dentro de la
  * {@link TablaSimbolos}. Una expresión inválida devuelve {@link TipoDato#ERROR} para que las
  * expresiones que dependen de ella no repitan el mismo mensaje.
  *
- * <p>Las estructuras avanzadas (clases, herencia, {@code this}, arreglos e índices) devuelven
- * {@link TipoDato#DESCONOCIDO}: sus subexpresiones sí se recorren, pero su validación
- * corresponde a la fase de estructuras avanzadas.
+ * <p>Valida tipos primitivos, funciones, estructuras de control, ámbitos léxicos, y estructuras
+ * avanzadas (clases, herencia, constructores, {@code this}, {@code new}, atributos, métodos,
+ * arreglos homogéneos y multidimensionales, indexación y {@code foreach}).
  */
 public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     private final TablaSimbolos tabla = new TablaSimbolos();
     private final ErrorSemanticoReporter reporter;
     private final Deque<Simbolo> funcionesActivas = new ArrayDeque<>();
+    private Simbolo claseActual = null;
     private int bloquesAbiertos;
     private int ciclosActivos;
     private int switchesActivos;
@@ -133,8 +136,8 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
     }
 
     /**
-     * Declara funciones y clases antes de recorrer el ámbito, de modo que una función pueda
-     * llamarse a sí misma o a otra declarada más abajo en el mismo ámbito.
+     * Declara funciones y clases antes de recorrer el ámbito, de modo que una función o clase
+     * pueda invocarse o instanciarse recursivamente o antes de su definición textual.
      */
     private void registrarDeclaracionesAnticipadas(List<StatementContext> statements) {
         for (StatementContext statement : statements) {
@@ -172,8 +175,48 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     private void declararClase(ClassDeclarationContext ctx) {
         Token nombre = ctx.Identifier(0).getSymbol();
-        if (!tabla.declarar(Simbolo.clase(nombre.getText(), nombre.getLine(), columna(nombre)))) {
+        String clasePadre = ctx.Identifier().size() > 1 ? ctx.Identifier(1).getText() : null;
+        Simbolo simboloClase = Simbolo.clase(nombre.getText(), clasePadre, nombre.getLine(), columna(nombre));
+
+        if (!tabla.declarar(simboloClase)) {
             reportarRedeclaracion(nombre, "La clase");
+            return;
+        }
+
+        // Registrar miembros de la clase en su entorno de miembros
+        for (ClassMemberContext member : ctx.classMember()) {
+            if (member.functionDeclaration() != null) {
+                FunctionDeclarationContext fnCtx = member.functionDeclaration();
+                Token fnNombre = fnCtx.Identifier().getSymbol();
+                TipoDato fnRetorno = fnCtx.type() == null ? TipoDato.VOID : resolverTipo(fnCtx.type());
+                Simbolo metodo = Simbolo.funcion(fnNombre.getText(), parametrosDe(fnCtx), fnRetorno,
+                        fnNombre.getLine(), columna(fnNombre));
+                if (!simboloClase.entornoMiembros().declarar(metodo)) {
+                    reportarRedeclaracion(fnNombre, "El miembro");
+                }
+            } else if (member.variableDeclaration() != null) {
+                VariableDeclarationContext varCtx = member.variableDeclaration();
+                Token varNombre = varCtx.Identifier().getSymbol();
+                TipoDato varTipo = varCtx.typeAnnotation() == null
+                        ? TipoDato.DESCONOCIDO
+                        : resolverTipo(varCtx.typeAnnotation().type());
+                Simbolo varSim = Simbolo.variable(varNombre.getText(), varTipo, varNombre.getLine(),
+                        columna(varNombre), false, varCtx.initializer() != null);
+                if (!simboloClase.entornoMiembros().declarar(varSim)) {
+                    reportarRedeclaracion(varNombre, "El atributo");
+                }
+            } else if (member.constantDeclaration() != null) {
+                ConstantDeclarationContext constCtx = member.constantDeclaration();
+                Token constNombre = constCtx.Identifier().getSymbol();
+                TipoDato constTipo = constCtx.typeAnnotation() == null
+                        ? TipoDato.DESCONOCIDO
+                        : resolverTipo(constCtx.typeAnnotation().type());
+                Simbolo constSim = Simbolo.variable(constNombre.getText(), constTipo, constNombre.getLine(),
+                        columna(constNombre), true, true);
+                if (!simboloClase.entornoMiembros().declarar(constSim)) {
+                    reportarRedeclaracion(constNombre, "La constante");
+                }
+            }
         }
     }
 
@@ -183,14 +226,13 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         TipoDato retorno = ctx.type() == null ? TipoDato.VOID : resolverTipo(ctx.type());
         List<Simbolo.Parametro> parametros = parametrosDe(ctx);
 
-        // El entorno de la función cuelga del entorno donde se declaró: eso es lo que permite
-        // que una función anidada siga viendo las variables de la función que la contiene.
+        // El entorno de la función cuelga del entorno donde se declaró
         entrarBloque("funcion:" + nombre.getText());
         declararParametros(parametros);
 
         funcionesActivas.push(Simbolo.funcion(nombre.getText(), parametros, retorno,
                 nombre.getLine(), columna(nombre)));
-        // Un ciclo exterior no alcanza al cuerpo de la función: 'break' y 'continue' no cruzan.
+        // Un ciclo exterior no alcanza al cuerpo de la función: 'break' y 'continue' no cruzan
         int ciclosExteriores = ciclosActivos;
         int switchesExteriores = switchesActivos;
         ciclosActivos = 0;
@@ -245,8 +287,126 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     @Override
     public TipoDato visitClassDeclaration(ClassDeclarationContext ctx) {
-        // El contenido de la clase se valida en la fase de estructuras avanzadas.
+        Token nombre = ctx.Identifier(0).getSymbol();
+        String nombreClase = nombre.getText();
+
+        if (ctx.Identifier().size() > 1) {
+            Token tokenPadre = ctx.Identifier(1).getSymbol();
+            String nombrePadre = tokenPadre.getText();
+            Optional<Simbolo> optPadre = tabla.buscar(nombrePadre);
+            if (optPadre.isEmpty()) {
+                reportar(tokenPadre, "La clase padre '" + nombrePadre + "' no está declarada en este ámbito.");
+            } else if (optPadre.get().categoria() != CategoriaSimbolo.CLASE) {
+                reportar(tokenPadre, "'" + nombrePadre + "' no es una clase y no se puede heredar de ella.");
+            } else if (tieneCicloDeHerencia(nombreClase, nombrePadre)) {
+                reportar(tokenPadre, "Herencia cíclica detectada: la clase '" + nombreClase
+                        + "' no puede heredar de sí misma directa o indirectamente.");
+            }
+        }
+
+        Optional<Simbolo> optClase = tabla.buscar(nombreClase);
+        if (optClase.isEmpty()) {
+            return TipoDato.VOID;
+        }
+        Simbolo claseSimbolo = optClase.get();
+
+        Simbolo clasePrevia = claseActual;
+        claseActual = claseSimbolo;
+
+        // Entrar en el entorno de la clase
+        tabla.entrarEntorno("clase:" + nombreClase);
+        if (claseSimbolo.entornoMiembros() != null) {
+            for (Simbolo miembro : claseSimbolo.entornoMiembros().simbolos()) {
+                tabla.declarar(miembro);
+            }
+        }
+
+        for (ClassMemberContext member : ctx.classMember()) {
+            if (member.functionDeclaration() != null) {
+                visitarMetodoDeClase(member.functionDeclaration());
+            } else if (member.variableDeclaration() != null) {
+                visitarAtributoDeClase(member.variableDeclaration());
+            } else if (member.constantDeclaration() != null) {
+                visitarConstanteDeClase(member.constantDeclaration());
+            }
+        }
+
+        tabla.salirEntorno();
+        claseActual = clasePrevia;
         return TipoDato.VOID;
+    }
+
+    private void visitarMetodoDeClase(FunctionDeclarationContext ctx) {
+        Token nombre = ctx.Identifier().getSymbol();
+        TipoDato retorno = ctx.type() == null ? TipoDato.VOID : resolverTipo(ctx.type());
+        List<Simbolo.Parametro> parametros = parametrosDe(ctx);
+
+        entrarBloque("metodo:" + nombre.getText());
+        declararParametros(parametros);
+
+        funcionesActivas.push(Simbolo.funcion(nombre.getText(), parametros, retorno,
+                nombre.getLine(), columna(nombre)));
+        int ciclosExteriores = ciclosActivos;
+        int switchesExteriores = switchesActivos;
+        ciclosActivos = 0;
+        switchesActivos = 0;
+
+        recorrerAmbito(ctx.block().statement());
+
+        ciclosActivos = ciclosExteriores;
+        switchesActivos = switchesExteriores;
+        funcionesActivas.pop();
+        tabla.salirEntorno();
+
+        exigirRetornoPresente(ctx, nombre, retorno);
+    }
+
+    private void visitarAtributoDeClase(VariableDeclarationContext ctx) {
+        Token nombre = ctx.Identifier().getSymbol();
+        TipoDato declarado = ctx.typeAnnotation() == null
+                ? null
+                : resolverTipo(ctx.typeAnnotation().type());
+
+        if (ctx.initializer() != null) {
+            TipoDato valor = visit(ctx.initializer().expression());
+            if (declarado != null) {
+                exigirAsignable(declarado, valor, ctx.initializer().expression(), nombre.getText(),
+                        "El atributo '" + nombre.getText() + "'");
+            }
+        }
+    }
+
+    private void visitarConstanteDeClase(ConstantDeclarationContext ctx) {
+        Token nombre = ctx.Identifier().getSymbol();
+        TipoDato declarado = ctx.typeAnnotation() == null
+                ? null
+                : resolverTipo(ctx.typeAnnotation().type());
+
+        TipoDato valor = visit(ctx.expression());
+        if (declarado != null) {
+            exigirAsignable(declarado, valor, ctx.expression(), nombre.getText(),
+                    "La constante '" + nombre.getText() + "'");
+        }
+    }
+
+    private boolean tieneCicloDeHerencia(String subClase, String superClase) {
+        if (Objects.equals(subClase, superClase)) {
+            return true;
+        }
+        String actual = superClase;
+        int maxNivel = 100;
+        while (actual != null && maxNivel-- > 0) {
+            Optional<Simbolo> sim = tabla.buscar(actual);
+            if (sim.isEmpty() || sim.get().categoria() != CategoriaSimbolo.CLASE) {
+                break;
+            }
+            String padre = sim.get().clasePadre();
+            if (Objects.equals(padre, subClase)) {
+                return true;
+            }
+            actual = padre;
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------
@@ -325,7 +485,15 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
             return TipoDato.VOID;
         }
 
-        // Asignación a propiedad: se valida en la fase de estructuras avanzadas.
+        // Asignación a propiedad: expression '.' Identifier '=' expression ';'
+        if (ctx.expression().size() == 2 && ctx.Identifier() != null) {
+            TipoDato objetoTipo = visit(ctx.expression(0));
+            Token propiedad = ctx.Identifier().getSymbol();
+            TipoDato valor = visit(ctx.expression(1));
+            asignarPropiedad(objetoTipo, propiedad, valor, ctx.expression(1));
+            return TipoDato.VOID;
+        }
+
         for (ExpressionContext expresion : ctx.expression()) {
             visit(expresion);
         }
@@ -345,10 +513,10 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     @Override
     public TipoDato visitPropertyAssignExpr(PropertyAssignExprContext ctx) {
-        // Asignación a propiedad: se valida en la fase de estructuras avanzadas.
-        visit(ctx.lhs);
-        visit(ctx.assignmentExpr());
-        return TipoDato.DESCONOCIDO;
+        TipoDato objetoTipo = visit(ctx.lhs);
+        Token propiedad = ctx.Identifier().getSymbol();
+        TipoDato valor = visit(ctx.assignmentExpr());
+        return asignarPropiedad(objetoTipo, propiedad, valor, ctx.assignmentExpr());
     }
 
     private TipoDato asignar(Token identificador, TipoDato valor, ParserRuleContext origen) {
@@ -380,6 +548,47 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         return simbolo.tipo();
     }
 
+    private TipoDato asignarPropiedad(TipoDato objetoTipo, Token propiedad, TipoDato valor, ParserRuleContext origen) {
+        if (indeterminado(objetoTipo)) {
+            return TipoDato.DESCONOCIDO;
+        }
+        if (objetoTipo.clase() != TipoDato.Clase.CLASE) {
+            reportar(propiedad, "No se puede asignar la propiedad '" + propiedad.getText()
+                    + "' a un valor de tipo '" + objetoTipo + "'.");
+            return TipoDato.ERROR;
+        }
+
+        Optional<Simbolo> optClase = tabla.buscar(objetoTipo.nombreClase());
+        if (optClase.isEmpty() || optClase.get().categoria() != CategoriaSimbolo.CLASE) {
+            reportar(propiedad, "La clase '" + objetoTipo.nombreClase() + "' no está declarada.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo clase = optClase.get();
+        Optional<Simbolo> optMiembro = clase.buscarMiembro(propiedad.getText(), tabla);
+        if (optMiembro.isEmpty()) {
+            reportar(propiedad, "La clase '" + objetoTipo.nombreClase() + "' no contiene el atributo '"
+                    + propiedad.getText() + "'.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo miembro = optMiembro.get();
+        if (miembro.categoria() == CategoriaSimbolo.FUNCION) {
+            reportar(propiedad, "'" + propiedad.getText() + "' es un método de la clase '"
+                    + objetoTipo.nombreClase() + "' y no admite asignaciones.");
+            return TipoDato.ERROR;
+        }
+        if (miembro.constante()) {
+            reportar(propiedad, "La constante '" + propiedad.getText() + "' de la clase '"
+                    + objetoTipo.nombreClase() + "' no puede recibir un nuevo valor.");
+            return miembro.tipo();
+        }
+
+        exigirAsignable(miembro.tipo(), valor, origen, propiedad.getText(),
+                "El atributo '" + propiedad.getText() + "' de la clase '" + objetoTipo.nombreClase() + "'");
+        return miembro.tipo();
+    }
+
     /** Devuelve el token del identificador cuando el lado izquierdo es un nombre simple. */
     private static Token identificadorSimple(LeftHandSideContext ctx) {
         if (ctx == null || !ctx.suffixOp().isEmpty()) {
@@ -393,7 +602,8 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     private static Simbolo comoInicializado(Simbolo simbolo) {
         return new Simbolo(simbolo.nombre(), simbolo.categoria(), simbolo.tipo(), simbolo.linea(),
-                simbolo.columna(), simbolo.constante(), true, simbolo.parametros(), simbolo.tipoRetorno());
+                simbolo.columna(), simbolo.constante(), true, simbolo.parametros(), simbolo.tipoRetorno(),
+                simbolo.clasePadre(), simbolo.entornoMiembros());
     }
 
     private static String descripcionCategoria(CategoriaSimbolo categoria) {
@@ -424,10 +634,6 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         return TipoDato.VOID;
     }
 
-    /**
-     * Recorre la condición y el avance del {@code for}. La gramática permite omitir cualquiera de
-     * las dos, así que la condición se identifica como la expresión anterior al último ';'.
-     */
     protected void visitarCabeceraFor(ForStatementContext ctx) {
         int ultimoPuntoYComa = -1;
         for (int i = 0; i < ctx.getChildCount(); i++) {
@@ -450,13 +656,24 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
     @Override
     public TipoDato visitForeachStatement(ForeachStatementContext ctx) {
         TipoDato iterable = visit(ctx.expression());
-        entrarBloque("foreach");
+        Token variable = ctx.Identifier().getSymbol();
 
-        // El tipo del elemento se afina en la fase de estructuras avanzadas.
-        TipoDato tipoElemento = iterable != null && iterable.clase() == TipoDato.Clase.ARREGLO
-                ? iterable.tipoElemento()
-                : TipoDato.DESCONOCIDO;
-        declararVariable(ctx.Identifier().getSymbol(), tipoElemento, false, true);
+        if (!indeterminado(iterable) && iterable.clase() != TipoDato.Clase.ARREGLO && iterable.clase() != TipoDato.Clase.STRING) {
+            reportar(ctx.expression().getStart(), "La sentencia 'foreach' requiere un arreglo o una cadena, pero se recibió un tipo '"
+                    + iterable + "'.");
+        }
+
+        TipoDato tipoElemento;
+        if (iterable != null && iterable.clase() == TipoDato.Clase.ARREGLO) {
+            tipoElemento = iterable.tipoElemento();
+        } else if (iterable != null && iterable.clase() == TipoDato.Clase.STRING) {
+            tipoElemento = TipoDato.STRING;
+        } else {
+            tipoElemento = TipoDato.DESCONOCIDO;
+        }
+
+        entrarBloque("foreach");
+        declararVariable(variable, tipoElemento, false, true);
 
         visitarCuerpoDeCiclo(ctx.block());
         tabla.salirEntorno();
@@ -505,7 +722,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         if (indeterminado(siFalso)) {
             return siVerdadero;
         }
-        if (!siVerdadero.esCompatibleCon(siFalso)) {
+        if (!siVerdadero.esCompatibleCon(siFalso, tabla)) {
             reportar(ctx.expression(1).getStart(), "Las dos ramas del operador ternario deben producir"
                     + " tipos compatibles, pero son '" + siVerdadero + "' y '" + siFalso + "'.");
             return TipoDato.DESCONOCIDO;
@@ -542,7 +759,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         for (int i = 1; i < ctx.relationalExpr().size(); i++) {
             Token operador = operador(ctx, 2 * i - 1);
             TipoDato derecha = visit(ctx.relationalExpr(i));
-            if (!indeterminado(izquierda) && !indeterminado(derecha) && !izquierda.esCompatibleCon(derecha)) {
+            if (!indeterminado(izquierda) && !indeterminado(derecha) && !izquierda.esCompatibleCon(derecha, tabla)) {
                 reportar(operador, "El operador '" + operador.getText() + "' no puede comparar '"
                         + izquierda + "' con '" + derecha + "' porque son tipos incompatibles.");
             }
@@ -649,11 +866,21 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
             return ctx.Literal().getText().startsWith("\"") ? TipoDato.STRING : TipoDato.INTEGER;
         }
         if (ctx.arrayLiteral() != null) {
-            // La homogeneidad del arreglo se valida en la fase de estructuras avanzadas.
-            for (ExpressionContext elemento : ctx.arrayLiteral().expression()) {
-                visit(elemento);
+            List<ExpressionContext> elementos = ctx.arrayLiteral().expression();
+            if (elementos.isEmpty()) {
+                return TipoDato.arreglo(TipoDato.DESCONOCIDO);
             }
-            return TipoDato.DESCONOCIDO;
+            TipoDato tipoEsperado = visit(elementos.get(0));
+            for (int i = 1; i < elementos.size(); i++) {
+                TipoDato tipoActual = visit(elementos.get(i));
+                if (!indeterminado(tipoEsperado) && !indeterminado(tipoActual)
+                        && !tipoEsperado.esCompatibleCon(tipoActual, tabla)) {
+                    reportar(elementos.get(i).getStart(), "Los elementos del arreglo deben ser del mismo tipo; se esperaba '"
+                            + tipoEsperado + "', pero se encontró '" + tipoActual + "'.");
+                    return TipoDato.ERROR;
+                }
+            }
+            return TipoDato.arreglo(tipoEsperado);
         }
         return switch (ctx.getText()) {
             case "true", "false" -> TipoDato.BOOLEAN;
@@ -670,18 +897,135 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
                 : null;
 
         TipoDato tipo;
-        int primerSufijoPendiente = 0;
+        int indiceSufijo = 0;
         if (nombre != null && !sufijos.isEmpty() && sufijos.get(0) instanceof CallExprContext llamada) {
             tipo = tipoDeLlamada(nombre, llamada);
-            primerSufijoPendiente = 1;
+            indiceSufijo = 1;
         } else {
             tipo = visit(ctx.primaryAtom());
         }
 
-        for (int i = primerSufijoPendiente; i < sufijos.size(); i++) {
-            tipo = aplicarSufijo(tipo, sufijos.get(i));
+        while (indiceSufijo < sufijos.size()) {
+            SuffixOpContext sufijo = sufijos.get(indiceSufijo);
+            if (sufijo instanceof PropertyAccessExprContext prop) {
+                Token propToken = prop.Identifier().getSymbol();
+                if (indiceSufijo + 1 < sufijos.size() && sufijos.get(indiceSufijo + 1) instanceof CallExprContext llamada) {
+                    tipo = tipoDeLlamadaMetodo(tipo, propToken, llamada);
+                    indiceSufijo += 2;
+                } else {
+                    tipo = tipoDeAccesoPropiedad(tipo, propToken);
+                    indiceSufijo += 1;
+                }
+            } else if (sufijo instanceof IndexExprContext indice) {
+                tipo = tipoDeIndexacion(tipo, indice);
+                indiceSufijo += 1;
+            } else if (sufijo instanceof CallExprContext llamada) {
+                visitarArgumentos(llamada);
+                if (!indeterminado(tipo)) {
+                    reportar(llamada.getStart(), "La expresión no es una función ni un método y no puede invocarse.");
+                }
+                tipo = TipoDato.ERROR;
+                indiceSufijo += 1;
+            } else {
+                tipo = TipoDato.DESCONOCIDO;
+                indiceSufijo += 1;
+            }
         }
         return tipo;
+    }
+
+    private TipoDato tipoDeAccesoPropiedad(TipoDato tipo, Token propToken) {
+        if (indeterminado(tipo)) {
+            return TipoDato.DESCONOCIDO;
+        }
+        if (tipo.clase() != TipoDato.Clase.CLASE) {
+            reportar(propToken, "No se puede acceder a la propiedad '" + propToken.getText()
+                    + "' en un valor de tipo '" + tipo + "'.");
+            return TipoDato.ERROR;
+        }
+
+        Optional<Simbolo> optClase = tabla.buscar(tipo.nombreClase());
+        if (optClase.isEmpty() || optClase.get().categoria() != CategoriaSimbolo.CLASE) {
+            reportar(propToken, "La clase '" + tipo.nombreClase() + "' no está declarada.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo clase = optClase.get();
+        Optional<Simbolo> optMiembro = clase.buscarMiembro(propToken.getText(), tabla);
+        if (optMiembro.isEmpty()) {
+            reportar(propToken, "La clase '" + tipo.nombreClase() + "' no contiene ningún atributo o método llamado '"
+                    + propToken.getText() + "'.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo miembro = optMiembro.get();
+        return miembro.categoria() == CategoriaSimbolo.FUNCION ? miembro.tipoRetorno() : miembro.tipo();
+    }
+
+    private TipoDato tipoDeLlamadaMetodo(TipoDato tipo, Token propToken, CallExprContext llamada) {
+        List<TipoDato> tiposArg = visitarArgumentos(llamada);
+        List<ExpressionContext> args = argumentosDe(llamada);
+
+        if (indeterminado(tipo)) {
+            return TipoDato.DESCONOCIDO;
+        }
+        if (tipo.clase() != TipoDato.Clase.CLASE) {
+            reportar(propToken, "No se puede invocar el método '" + propToken.getText()
+                    + "' en un valor de tipo '" + tipo + "'.");
+            return TipoDato.ERROR;
+        }
+
+        Optional<Simbolo> optClase = tabla.buscar(tipo.nombreClase());
+        if (optClase.isEmpty() || optClase.get().categoria() != CategoriaSimbolo.CLASE) {
+            reportar(propToken, "La clase '" + tipo.nombreClase() + "' no está declarada.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo clase = optClase.get();
+        Optional<Simbolo> optMiembro = clase.buscarMiembro(propToken.getText(), tabla);
+        if (optMiembro.isEmpty()) {
+            reportar(propToken, "La clase '" + tipo.nombreClase() + "' no contiene ningún método llamado '"
+                    + propToken.getText() + "'.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo miembro = optMiembro.get();
+        if (miembro.categoria() != CategoriaSimbolo.FUNCION) {
+            reportar(propToken, "'" + propToken.getText() + "' es un atributo de la clase '"
+                    + tipo.nombreClase() + "' y no puede invocarse como método.");
+            return TipoDato.ERROR;
+        }
+
+        List<Simbolo.Parametro> params = miembro.parametros();
+        if (args.size() != params.size()) {
+            reportar(propToken, "El método '" + propToken.getText() + "' de la clase '" + tipo.nombreClase()
+                    + "' espera " + params.size() + " argumento(s), pero se recibieron " + args.size() + ".");
+            return miembro.tipoRetorno();
+        }
+
+        for (int i = 0; i < params.size(); i++) {
+            Simbolo.Parametro param = params.get(i);
+            exigirAsignable(param.tipo(), tiposArg.get(i), args.get(i), param.nombre(),
+                    "El parámetro '" + param.nombre() + "' del método '" + propToken.getText() + "'");
+        }
+        return miembro.tipoRetorno();
+    }
+
+    private TipoDato tipoDeIndexacion(TipoDato tipo, IndexExprContext indice) {
+        TipoDato tipoIndice = visit(indice.expression());
+        if (indeterminado(tipo)) {
+            return TipoDato.DESCONOCIDO;
+        }
+        if (tipo.clase() != TipoDato.Clase.ARREGLO && tipo.clase() != TipoDato.Clase.STRING) {
+            reportar(indice.getStart(), "Solo se pueden indexar arreglos o cadenas, pero se intentó indexar un tipo '"
+                    + tipo + "'.");
+            return TipoDato.ERROR;
+        }
+        if (!indeterminado(tipoIndice) && !tipoIndice.esNumerico()) {
+            reportar(indice.expression().getStart(), "El índice de acceso a un arreglo debe ser de tipo 'integer', pero es de tipo '"
+                    + tipoIndice + "'.");
+        }
+        return tipo.clase() == TipoDato.Clase.ARREGLO ? tipo.tipoElemento() : TipoDato.STRING;
     }
 
     /** Valida que el nombre invocado sea una función y que los argumentos calcen con sus parámetros. */
@@ -723,19 +1067,6 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         return ctx.arguments() == null ? List.of() : ctx.arguments().expression();
     }
 
-    /**
-     * Aplica llamada, índice o acceso a propiedad sobre el tipo acumulado. Las subexpresiones se
-     * recorren siempre; el tipo resultante se resuelve en fases posteriores.
-     */
-    protected TipoDato aplicarSufijo(TipoDato tipo, SuffixOpContext sufijo) {
-        if (sufijo instanceof CallExprContext llamada) {
-            visitarArgumentos(llamada);
-        } else if (sufijo instanceof IndexExprContext indice) {
-            visit(indice.expression());
-        }
-        return TipoDato.DESCONOCIDO;
-    }
-
     protected List<TipoDato> visitarArgumentos(CallExprContext ctx) {
         List<TipoDato> tipos = new ArrayList<>();
         if (ctx.arguments() == null) {
@@ -770,19 +1101,66 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     @Override
     public TipoDato visitNewExpr(NewExprContext ctx) {
-        // La existencia de la clase y su constructor se validan en estructuras avanzadas.
-        if (ctx.arguments() != null) {
-            for (ExpressionContext argumento : ctx.arguments().expression()) {
-                visit(argumento);
+        Token nombreClaseToken = ctx.Identifier().getSymbol();
+        String nombreClase = nombreClaseToken.getText();
+        Optional<Simbolo> optClase = tabla.buscar(nombreClase);
+
+        List<TipoDato> tiposArgumentos = new ArrayList<>();
+        List<ExpressionContext> argumentos = ctx.arguments() == null ? List.of() : ctx.arguments().expression();
+        for (ExpressionContext arg : argumentos) {
+            tiposArgumentos.add(visit(arg));
+        }
+
+        if (optClase.isEmpty()) {
+            reportar(nombreClaseToken, "La clase '" + nombreClase + "' no está declarada en este ámbito.");
+            return TipoDato.ERROR;
+        }
+
+        Simbolo simbolo = optClase.get();
+        if (simbolo.categoria() != CategoriaSimbolo.CLASE) {
+            reportar(nombreClaseToken, "'" + nombreClase + "' es " + descripcionCategoria(simbolo.categoria())
+                    + " y no se puede instanciar con 'new'.");
+            return TipoDato.ERROR;
+        }
+
+        // Buscar constructor explícito (llamado 'constructor' o con el nombre de la clase)
+        Optional<Simbolo> constructor = simbolo.buscarMiembro("constructor", tabla);
+        if (constructor.isEmpty()) {
+            constructor = simbolo.buscarMiembro(nombreClase, tabla);
+        }
+
+        if (constructor.isPresent() && constructor.get().categoria() == CategoriaSimbolo.FUNCION) {
+            Simbolo constrSim = constructor.get();
+            List<Simbolo.Parametro> params = constrSim.parametros();
+            if (argumentos.size() != params.size()) {
+                reportar(nombreClaseToken, "El constructor de '" + nombreClase + "' espera " + params.size()
+                        + " argumento(s), pero se recibieron " + argumentos.size() + ".");
+            } else {
+                for (int i = 0; i < params.size(); i++) {
+                    Simbolo.Parametro param = params.get(i);
+                    exigirAsignable(param.tipo(), tiposArgumentos.get(i), argumentos.get(i), param.nombre(),
+                            "El argumento para el parámetro '" + param.nombre() + "' del constructor de '" + nombreClase + "'");
+                }
+            }
+        } else {
+            // Constructor por defecto sin argumentos
+            if (!argumentos.isEmpty()) {
+                reportar(nombreClaseToken, "La clase '" + nombreClase
+                        + "' no define un constructor con parámetros y espera 0 argumentos, pero se recibieron "
+                        + argumentos.size() + ".");
             }
         }
-        return TipoDato.DESCONOCIDO;
+
+        return TipoDato.clase(nombreClase);
     }
 
     @Override
     public TipoDato visitThisExpr(ThisExprContext ctx) {
-        // El uso válido de 'this' se valida en la fase de estructuras avanzadas.
-        return TipoDato.DESCONOCIDO;
+        if (claseActual == null) {
+            reportar(ctx.getStart(), "'this' solo puede usarse dentro del cuerpo de una clase.");
+            return TipoDato.ERROR;
+        }
+        return TipoDato.clase(claseActual.nombre());
     }
 
     // ------------------------------------------------------------------
@@ -819,7 +1197,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         switchesActivos++;
         for (SwitchCaseContext caso : ctx.switchCase()) {
             TipoDato tipoCaso = visit(caso.expression());
-            if (!indeterminado(selector) && !indeterminado(tipoCaso) && !selector.esCompatibleCon(tipoCaso)) {
+            if (!indeterminado(selector) && !indeterminado(tipoCaso) && !selector.esCompatibleCon(tipoCaso, tabla)) {
                 reportar(caso.expression().getStart(), "El valor del 'case' es de tipo '" + tipoCaso
                         + "' y no puede compararse con el selector, que es de tipo '" + selector + "'.");
             }
@@ -906,7 +1284,6 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     private TipoDato resolverTipoBase(BaseTypeContext ctx) {
         if (ctx.Identifier() != null) {
-            // Que la clase exista se comprueba en la fase de estructuras avanzadas.
             return TipoDato.clase(ctx.Identifier().getText());
         }
         return switch (ctx.getText()) {
@@ -923,7 +1300,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     protected void exigirAsignable(TipoDato destino, TipoDato valor, ParserRuleContext origen,
                                    String simbolo, String sujeto) {
-        if (destino == null || indeterminado(valor) || destino.esCompatibleCon(valor)) {
+        if (destino == null || indeterminado(valor) || destino.esCompatibleCon(valor, tabla)) {
             return;
         }
         reporter.reportar(origen.getStart().getLine(), columna(origen.getStart()), simbolo,
