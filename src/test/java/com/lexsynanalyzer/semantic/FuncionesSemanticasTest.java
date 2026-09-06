@@ -83,6 +83,29 @@ class FuncionesSemanticasTest {
     }
 
     @Test
+    @DisplayName("Una función debe invocarse antes de utilizar su resultado como valor")
+    void rechazaFuncionComoOperandoSinInvocarla() {
+        List<AnalysisError> errores = semanticos("""
+                function identidad(): integer {
+                    return 1;
+                }
+                let resultado: integer = identidad * 2;
+                """);
+
+        assertEquals(1, errores.size(), errores.toString());
+        assertEquals("identidad", errores.getFirst().simbolo());
+        assertTrue(errores.getFirst().descripcion().contains("debe invocarse con paréntesis"),
+                errores.toString());
+
+        assertSinErrores("""
+                function identidad(): integer {
+                    return 1;
+                }
+                let resultado: integer = identidad() * 2;
+                """);
+    }
+
+    @Test
     @DisplayName("Llamar a una función no declarada es un error")
     void rechazaLlamadaAFuncionInexistente() {
         List<AnalysisError> errores = semanticos("let x: integer = calcular(1);");

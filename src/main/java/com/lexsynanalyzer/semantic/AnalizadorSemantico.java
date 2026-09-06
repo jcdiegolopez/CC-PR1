@@ -1089,7 +1089,12 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         }
 
         Simbolo simbolo = encontrado.get();
-        if (simbolo.categoria() == CategoriaSimbolo.FUNCION || simbolo.categoria() == CategoriaSimbolo.CLASE) {
+        if (simbolo.categoria() == CategoriaSimbolo.FUNCION) {
+            reportar(identificador, "La función '" + identificador.getText()
+                    + "' no puede utilizarse como un valor; debe invocarse con paréntesis.");
+            return TipoDato.ERROR;
+        }
+        if (simbolo.categoria() == CategoriaSimbolo.CLASE) {
             return TipoDato.DESCONOCIDO;
         }
         if (!simbolo.inicializado()) {
