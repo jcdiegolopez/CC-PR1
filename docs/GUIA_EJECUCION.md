@@ -48,9 +48,13 @@ mvn test
   ```powershell
   mvn test -Dtest=SyntaxTreePanelTest
   ```
-- **Pruebas de Regresión de los 8 Casos Oficiales:**
+- **Pruebas de Regresión de los 8 Casos Oficiales (léxico/sintáctico):**
   ```powershell
   mvn test -Dtest=CasosPruebaTest
+  ```
+- **Pruebas de Regresión de los 7 Casos por Regla Semántica:**
+  ```powershell
+  mvn test -Dtest=CasosSemanticosTest
   ```
 - **Pruebas de Tipos, Funciones, Ámbitos y Flujo:**
   ```powershell

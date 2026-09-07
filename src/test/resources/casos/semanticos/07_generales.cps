@@ -22,11 +22,17 @@ function sinRetorno(): integer {
     print("no retorno nada");
 }
 
-//  "no multiplicar funciones" (expresión sin sentido semántico)
+// 3) Expresión sin sentido: una función usada como operando -> ERROR
 function identidad(): integer { return 1; }
 let sinSentido: integer = identidad * 2;
 
-// 3) Código muerto tras un 'break' dentro de un ciclo -> ERROR
+// 4) Expresión sin sentido: el nombre de una clase usado como valor -> ERROR
+class Motor {
+    var potencia: integer;
+}
+let tampocoTieneSentido: integer = Motor + 1;
+
+// 5) Código muerto tras un 'break' dentro de un ciclo -> ERROR
 for (let i: integer = 0; i < 3; i = i + 1) {
     break;
     print("inalcanzable");

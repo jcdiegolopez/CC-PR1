@@ -34,7 +34,7 @@ Adicionalmente, incorpora un visualizador interactivo del **Árbol Sintáctico (
    - Panel de diagnósticos en pestañas: tabla de errores con clasificación por colores y árbol sintáctico.
    - Resaltado interactivo: al hacer clic en un error, el visor resalta automáticamente la línea en el código fuente.
 6. **Procesamiento Asíncrono (`SwingWorker`):** Evita que la interfaz se congele durante el análisis.
-7. **Suite de 99 Pruebas Automatizadas:** Cobertura de regresión para los 8 casos oficiales, pruebas semánticas unitarias y pruebas de GUI/árbol en JUnit 5.
+7. **Suite de 116 Pruebas Automatizadas:** Cobertura de regresión para los 8 casos oficiales léxico/sintácticos, para los 7 archivos de demostración por categoría de regla semántica, pruebas semánticas unitarias y pruebas de GUI/árbol en JUnit 5.
 
 ---
 
@@ -62,7 +62,7 @@ Para información detallada del diseño y funcionamiento del sistema:
 mvn clean compile
 ```
 
-### 2. Ejecutar la Suite de Pruebas Unitarias (99 tests)
+### 2. Ejecutar la Suite de Pruebas Unitarias (116 tests)
 ```bash
 mvn test
 ```
@@ -111,6 +111,7 @@ CC-LAB01/
 │   └── test/
 │       ├── java/com/lexsynanalyzer/
 │       │   ├── CasosPruebaTest.java                  # Regresión de los 8 casos .cps oficiales
+│       │   ├── CasosSemanticosTest.java              # Regresión de los 7 casos .cps por regla semántica
 │       │   ├── analyzer/                             # Pruebas léxicas y sintácticas
 │       │   ├── gui/
 │       │   │   └── SyntaxTreePanelTest.java          # Pruebas del árbol sintáctico y GUI
@@ -124,4 +125,5 @@ CC-LAB01/
 │       │       ├── TablaSimbolosTest.java
 │       │       └── TiposSemanticosTest.java
 │       └── resources/casos/                          # Archivos de prueba .cps oficiales
+│           └── semanticos/                           # Archivos .cps por categoría de regla semántica
 ```

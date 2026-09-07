@@ -1095,7 +1095,10 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
             return TipoDato.ERROR;
         }
         if (simbolo.categoria() == CategoriaSimbolo.CLASE) {
-            return TipoDato.DESCONOCIDO;
+            reportar(identificador, "La clase '" + identificador.getText()
+                    + "' no puede utilizarse como un valor; use 'new " + identificador.getText()
+                    + "(...)' para crear una instancia.");
+            return TipoDato.ERROR;
         }
         if (!simbolo.inicializado()) {
             reportar(identificador, "La variable '" + identificador.getText()

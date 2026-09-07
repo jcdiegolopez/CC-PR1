@@ -239,4 +239,42 @@ class ClasesSemanticasTest {
         assertEquals(1, errores.size(), errores.toString());
         assertTrue(errores.getFirst().descripcion().contains("es un atributo"), errores.toString());
     }
+
+    @Test
+    @DisplayName("El nombre de una clase no puede usarse como un valor")
+    void rechazaClaseComoValor() {
+        List<AnalysisError> errores = semanticos("""
+                class Motor {
+                    var potencia: integer;
+                }
+                let x: integer = Motor + 1;
+                """);
+
+        assertEquals(1, errores.size(), errores.toString());
+        assertTrue(errores.getFirst().descripcion().contains("no puede utilizarse como un valor"), errores.toString());
+        assertEquals("Motor", errores.getFirst().simbolo(), errores.toString());
+    }
+
+    @Test
+    @DisplayName("Una herencia cíclica se reporta sin colgar la búsqueda de miembros")
+    void herenciaCiclicaNoProvocaRecursionInfinita() {
+        // 'new A()' busca un constructor que no existe: sin límite de niveles, la búsqueda subiría
+        // por A -> B -> A ... indefinidamente y reventaría el analizador con StackOverflowError.
+        List<AnalysisError> errores = semanticos("""
+                class A : B {
+                    var x: integer = 1;
+                }
+                class B : A {
+                    var y: integer = 2;
+                }
+                let a: A = new A();
+                let n: integer = a.noExiste;
+                """);
+
+        assertEquals(3, errores.size(), errores.toString());
+        assertTrue(errores.stream().allMatch(error -> error.tipo() == TipoError.SEMANTICO), errores.toString());
+        assertEquals(2, errores.stream().filter(e -> e.descripcion().contains("Herencia cíclica")).count(),
+                errores.toString());
+        assertTrue(errores.getLast().descripcion().contains("noExiste"), errores.toString());
+    }
 }

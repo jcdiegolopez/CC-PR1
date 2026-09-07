@@ -19,6 +19,7 @@ Este catálogo detalla todas las reglas semánticas validadas por el compilador,
 | **Herencia cíclica** | `Herencia cíclica detectada: la clase '<Clase>' no puede heredar de sí misma directa o indirectamente.` | `class A : B {} class B : A {}` |
 | **Asignación a método** | `'<nombre>' es un método de la clase '<Clase>' y no admite asignaciones.` | `let c = new Calc(); c.sumar = 10;` |
 | **Invocación de atributo como método** | `'<nombre>' es un atributo de la clase '<Clase>' y no puede invocarse como método.` | `let a = new Auto(); a.velocidad();` |
+| **Nombre de clase usado como valor** | `La clase '<Clase>' no puede utilizarse como un valor; use 'new <Clase>(...)' para crear una instancia.` | `class Motor {} let x: integer = Motor + 1;` |
 | **Asignación a constante de clase** | `La constante '<nombre>' de la clase '<Clase>' no puede recibir un nuevo valor.` | `c.CODIGO_FIJO = 200;` |
 
 ---
@@ -58,7 +59,9 @@ Este catálogo detalla todas las reglas semánticas validadas por el compilador,
 | **Redeclaración de símbolo** | `La variable '<nombre>' ya está declarada en este ámbito; use otro nombre.` | `let x = 1; let x = 2;` |
 | **Cantidad incorrecta de argumentos** | `La función '<nombre>' espera X argumento(s), pero se recibieron Y.` | `function f(a: integer) {} f(1, 2);` |
 | **Tipo de argumento incompatible** | `El parámetro '<param>' de '<func>' es de tipo '<T1>' y no puede recibir un valor de tipo '<T2>'.` | `function f(a: integer) {} f("uno");` |
+| **Nombre de función usado como valor** | `La función '<nombre>' no puede utilizarse como un valor; debe invocarse con paréntesis.` | `function f(): integer { return 1; } let x = f * 2;` |
 | **Invocación de variable no función** | `'<nombre>' es una variable y no puede invocarse como función.` | `let x = 5; x();` |
+| **Parámetro repetido** | `El parámetro '<nombre>' está repetido en la lista de parámetros.` | `function f(a: integer, a: integer) {}` |
 | **Función sin retorno** | `La función '<nombre>' declara el tipo de retorno '<T>', pero ninguna de sus rutas devuelve un valor.` | `function f(): integer {}` |
 | **`return` fuera de función** | `'return' solo puede usarse dentro de una función.` | `return 5;` |
 | **`break` / `continue` fuera de ciclo** | `'break' solo puede usarse dentro de un ciclo o de un 'switch'.` | `break;` |

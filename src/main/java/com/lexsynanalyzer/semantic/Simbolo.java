@@ -62,7 +62,22 @@ public record Simbolo(
                 linea, columna, false, true, List.of(), null, clasePadre, new Entorno("clase:" + nombre, null));
     }
 
+    /** Profundidad máxima de la cadena de herencia que se recorre al resolver un miembro. */
+    private static final int MAX_NIVELES_HERENCIA = 100;
+
     public Optional<Simbolo> buscarMiembro(String nombreMiembro, TablaSimbolos tabla) {
+        return buscarMiembro(nombreMiembro, tabla, MAX_NIVELES_HERENCIA);
+    }
+
+    /**
+     * Sube por la cadena de herencia con un límite de niveles: una jerarquía cíclica
+     * ({@code class A : B} y {@code class B : A}) ya se reporta como error aparte, pero sin este
+     * límite la búsqueda de un miembro inexistente no terminaría nunca.
+     */
+    private Optional<Simbolo> buscarMiembro(String nombreMiembro, TablaSimbolos tabla, int nivelesRestantes) {
+        if (nivelesRestantes <= 0) {
+            return Optional.empty();
+        }
         if (entornoMiembros != null) {
             Optional<Simbolo> local = entornoMiembros.buscarLocalmente(nombreMiembro);
             if (local.isPresent()) {
@@ -72,7 +87,7 @@ public record Simbolo(
         if (clasePadre != null && tabla != null) {
             Optional<Simbolo> padre = tabla.buscar(clasePadre);
             if (padre.isPresent() && padre.get().categoria() == CategoriaSimbolo.CLASE) {
-                return padre.get().buscarMiembro(nombreMiembro, tabla);
+                return padre.get().buscarMiembro(nombreMiembro, tabla, nivelesRestantes - 1);
             }
         }
         return Optional.empty();
