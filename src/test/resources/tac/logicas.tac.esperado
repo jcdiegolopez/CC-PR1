@@ -1,0 +1,39 @@
+function main, 32
+a = true
+b = false
+x = 5
+t0 = !a
+y = t0
+t0 = a
+ifFalse t0 goto L1
+t0 = b
+L1:
+if t0 goto L0
+t1 = x > 3
+t0 = t1
+L0:
+z = t0
+t0 = x == 5
+ifFalse t0 goto L2
+t1 = x != 4
+t0 = t1
+L2:
+w = t0
+ifFalse a goto L3
+t0 = 1
+goto L4
+L3:
+t0 = 2
+L4:
+t = t0
+t0 = x < 3
+ifFalse t0 goto L5
+t1 = x + 1
+t0 = t1
+goto L6
+L5:
+t1 = x - 1
+t0 = t1
+L6:
+q = t0
+endfunc

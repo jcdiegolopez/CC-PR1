@@ -1,0 +1,21 @@
+function main, 32
+a = 6
+b = 3
+c = 2
+t0 = b * c
+t0 = a + t0
+r = t0
+t0 = a + b
+t1 = c - 1
+t0 = t0 * t1
+r = t0
+t0 = -a
+neg = t0
+t0 = a % b
+t1 = a / b
+t0 = t0 + t1
+m = t0
+t0 = "hola" + " mundo"
+s = t0
+print r
+endfunc
