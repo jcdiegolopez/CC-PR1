@@ -51,6 +51,16 @@ public final class TablaSimbolos {
         return Optional.empty();
     }
 
+    /** Entorno donde está declarado el símbolo que {@link #buscar} encontraría. */
+    public Optional<Entorno> entornoDe(String nombre) {
+        for (Entorno entorno = actual; entorno != null; entorno = entorno.padre().orElse(null)) {
+            if (entorno.contieneLocalmente(nombre)) {
+                return Optional.of(entorno);
+            }
+        }
+        return Optional.empty();
+    }
+
     public boolean actualizar(Simbolo simbolo) {
         Objects.requireNonNull(simbolo);
         for (Entorno entorno = actual; entorno != null; entorno = entorno.padre().orElse(null)) {

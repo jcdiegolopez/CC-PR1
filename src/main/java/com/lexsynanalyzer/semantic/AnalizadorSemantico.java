@@ -73,6 +73,7 @@ import java.util.Optional;
 public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     private final TablaSimbolos tabla = new TablaSimbolos();
+    private final ResultadoSemantico resultado = new ResultadoSemantico(tabla);
     private final ErrorSemanticoReporter reporter;
     private final Deque<Simbolo> funcionesActivas = new ArrayDeque<>();
     private Simbolo claseActual = null;
@@ -93,6 +94,21 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         return tabla;
     }
 
+    /** Tipos, entornos y resoluciones que se conservan para la generación de código intermedio. */
+    public ResultadoSemantico resultado() {
+        return resultado;
+    }
+
+    /** Además de visitar, guarda el tipo calculado para cada nodo. */
+    @Override
+    public TipoDato visit(ParseTree arbol) {
+        TipoDato tipo = super.visit(arbol);
+        if (tipo != null) {
+            resultado.registrarTipo(arbol, tipo);
+        }
+        return tipo;
+    }
+
     // ------------------------------------------------------------------
     // Programa, bloques y ámbitos
     // ------------------------------------------------------------------
@@ -106,6 +122,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
     @Override
     public TipoDato visitBlock(BlockContext ctx) {
         entrarBloque("bloque");
+        resultado.registrarEntorno(ctx, tabla.actual());
         recorrerAmbito(ctx.statement());
         tabla.salirEntorno();
         return TipoDato.VOID;
@@ -228,7 +245,9 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
         // El entorno de la función cuelga del entorno donde se declaró
         entrarBloque("funcion:" + nombre.getText());
+        resultado.registrarEntorno(ctx, tabla.actual());
         declararParametros(parametros);
+        registrarResolucionDeParametros(ctx);
 
         funcionesActivas.push(Simbolo.funcion(nombre.getText(), parametros, retorno,
                 nombre.getLine(), columna(nombre)));
@@ -257,6 +276,15 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
                 reporter.reportar(parametro.linea(), parametro.columna(), parametro.nombre(),
                         "El parámetro '" + parametro.nombre() + "' está repetido en la lista de parámetros.");
             }
+        }
+    }
+
+    private void registrarResolucionDeParametros(FunctionDeclarationContext ctx) {
+        if (ctx.parameters() == null) {
+            return;
+        }
+        for (ParameterContext parametro : ctx.parameters().parameter()) {
+            resultado.registrarResolucion(parametro.Identifier().getSymbol(), tabla.actual());
         }
     }
 
@@ -315,6 +343,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
         // Entrar en el entorno de la clase
         tabla.entrarEntorno("clase:" + nombreClase);
+        resultado.registrarEntorno(ctx, tabla.actual());
         if (claseSimbolo.entornoMiembros() != null) {
             for (Simbolo miembro : claseSimbolo.entornoMiembros().simbolos()) {
                 tabla.declarar(miembro);
@@ -342,7 +371,9 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         List<Simbolo.Parametro> parametros = parametrosDe(ctx);
 
         entrarBloque("metodo:" + nombre.getText());
+        resultado.registrarEntorno(ctx, tabla.actual());
         declararParametros(parametros);
+        registrarResolucionDeParametros(ctx);
 
         funcionesActivas.push(Simbolo.funcion(nombre.getText(), parametros, retorno,
                 nombre.getLine(), columna(nombre)));
@@ -463,6 +494,8 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
                 constante, inicializada);
         if (!tabla.declarar(simbolo)) {
             reportarRedeclaracion(nombre, constante ? "La constante" : "La variable");
+        } else {
+            resultado.registrarResolucion(nombre, tabla.actual());
         }
     }
 
@@ -528,6 +561,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         }
 
         Simbolo simbolo = encontrado.get();
+        registrarResolucion(identificador);
         if (simbolo.constante()) {
             reportar(identificador, "La constante '" + identificador.getText()
                     + "' no puede recibir un nuevo valor después de su declaración.");
@@ -623,6 +657,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
     @Override
     public TipoDato visitForStatement(ForStatementContext ctx) {
         entrarBloque("for");
+        resultado.registrarEntorno(ctx, tabla.actual());
         if (ctx.variableDeclaration() != null) {
             visit(ctx.variableDeclaration());
         } else if (ctx.assignment() != null) {
@@ -673,6 +708,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         }
 
         entrarBloque("foreach");
+        resultado.registrarEntorno(ctx, tabla.actual());
         declararVariable(variable, tipoElemento, false, true);
 
         visitarCuerpoDeCiclo(ctx.block());
@@ -685,6 +721,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         visit(ctx.block(0));
 
         entrarBloque("catch");
+        resultado.registrarEntorno(ctx, tabla.actual());
         declararVariable(ctx.Identifier().getSymbol(), TipoDato.DESCONOCIDO, false, true);
         visit(ctx.block(1));
         tabla.salirEntorno();
@@ -908,6 +945,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         while (indiceSufijo < sufijos.size()) {
             SuffixOpContext sufijo = sufijos.get(indiceSufijo);
             if (sufijo instanceof PropertyAccessExprContext prop) {
+                resultado.registrarReceptor(prop, tipo);
                 Token propToken = prop.Identifier().getSymbol();
                 if (indiceSufijo + 1 < sufijos.size() && sufijos.get(indiceSufijo + 1) instanceof CallExprContext llamada) {
                     tipo = tipoDeLlamadaMetodo(tipo, propToken, llamada);
@@ -1089,6 +1127,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         }
 
         Simbolo simbolo = encontrado.get();
+        registrarResolucion(identificador);
         if (simbolo.categoria() == CategoriaSimbolo.FUNCION) {
             reportar(identificador, "La función '" + identificador.getText()
                     + "' no puede utilizarse como un valor; debe invocarse con paréntesis.");
@@ -1210,12 +1249,14 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
                         + "' y no puede compararse con el selector, que es de tipo '" + selector + "'.");
             }
             entrarBloque("case");
+            resultado.registrarEntorno(caso, tabla.actual());
             recorrerAmbito(caso.statement());
             tabla.salirEntorno();
         }
 
         if (ctx.defaultCase() != null) {
             entrarBloque("default");
+            resultado.registrarEntorno(ctx.defaultCase(), tabla.actual());
             recorrerAmbito(ctx.defaultCase().statement());
             tabla.salirEntorno();
         }
@@ -1364,6 +1405,11 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
     protected static int columna(Token token) {
         return token.getCharPositionInLine() + 1;
+    }
+
+    private void registrarResolucion(Token identificador) {
+        tabla.entornoDe(identificador.getText())
+                .ifPresent(entorno -> resultado.registrarResolucion(identificador, entorno));
     }
 
     protected void entrarBloque(String nombre) {
