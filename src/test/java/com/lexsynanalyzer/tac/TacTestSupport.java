@@ -2,7 +2,6 @@ package com.lexsynanalyzer.tac;
 
 import com.lexsynanalyzer.analyzer.AnalysisResult;
 import com.lexsynanalyzer.analyzer.LexSynAnalyzer;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ProgramContext;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -34,16 +33,9 @@ final class TacTestSupport {
         return LexSynAnalyzer.analizarTexto(fuente(caso));
     }
 
-    /**
-     * Misma regla que el pipeline: con errores no hay TAC. Cuando {@code LexSynAnalyzer} (C) enchufe
-     * el generador, esto pasa a leer el TAC de {@link AnalysisResult}.
-     */
+    /** TAC que produce el pipeline completo: vacío si el programa tiene errores. */
     static ProgramaTAC generar(String caso) {
-        AnalysisResult resultado = analizar(caso);
-        if (!resultado.exitoso()) {
-            return ProgramaTAC.vacio();
-        }
-        return new GeneradorTAC().generar((ProgramContext) resultado.arbol());
+        return analizar(caso).tac();
     }
 
     private TacTestSupport() {

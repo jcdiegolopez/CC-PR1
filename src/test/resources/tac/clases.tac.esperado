@@ -1,0 +1,25 @@
+function main, 28
+t0 = new Contador, 8
+t0.valor = 0
+t0.PASO = 1
+c = t0
+param c
+call Contador_incrementar, 1
+t0 = c.valor
+t0 = t0 * 2
+c.valor = t0
+param c
+t0 = call Contador_obtener, 1
+actual = t0
+print actual
+endfunc
+function Contador_incrementar, 40
+t0 = this.valor
+t1 = this.PASO
+t0 = t0 + t1
+this.valor = t0
+endfunc
+function Contador_obtener, 36
+t0 = this.valor
+return t0
+endfunc

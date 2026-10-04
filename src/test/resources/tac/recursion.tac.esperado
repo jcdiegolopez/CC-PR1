@@ -4,7 +4,7 @@ t0 = call factorial, 1
 f = t0
 print f
 endfunc
-function factorial, 28
+function factorial, 32
 t0 = n <= 1
 ifFalse t0 goto L0
 return 1

@@ -1,4 +1,4 @@
-function main, 28
+function main, 44
 t0 = newarray 2
 t0[0] = 1
 t0[1] = 2

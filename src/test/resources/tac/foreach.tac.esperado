@@ -1,4 +1,4 @@
-function main, 36
+function main, 40
 t0 = newarray 3
 t0[0] = 10
 t0[1] = 20

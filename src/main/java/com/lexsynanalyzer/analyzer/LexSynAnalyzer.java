@@ -3,7 +3,11 @@ package com.lexsynanalyzer.analyzer;
 import com.lexsynanalyzer.parser.LexSynAnalyzerLexer;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser;
 import com.lexsynanalyzer.semantic.AnalizadorSemantico;
+import com.lexsynanalyzer.semantic.AsignadorMemoria;
 import com.lexsynanalyzer.semantic.ErrorSemanticoReporter;
+import com.lexsynanalyzer.semantic.Layout;
+import com.lexsynanalyzer.tac.GeneradorTAC;
+import com.lexsynanalyzer.tac.ProgramaTAC;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -44,11 +48,21 @@ public final class LexSynAnalyzer {
 
         // El análisis semántico solo tiene sentido sobre un árbol completo: si el archivo tiene
         // errores léxicos o sintácticos, el ParseTree está incompleto y produciría falsos errores.
+        AnalizadorSemantico semantico = null;
         if (errores.isEmpty()) {
-            new AnalizadorSemantico(new ErrorSemanticoReporter(errores)).analizar(arbol);
+            semantico = new AnalizadorSemantico(new ErrorSemanticoReporter(errores));
+            semantico.analizar(arbol);
         }
 
-        return new AnalysisResult(sinDuplicadosYOrdenados(errores), arbol, parser.getRuleNames());
+        // Con cualquier error léxico, sintáctico o semántico no se genera código intermedio.
+        ProgramaTAC tac = ProgramaTAC.vacio();
+        Layout layout = null;
+        if (errores.isEmpty()) {
+            layout = AsignadorMemoria.asignar(semantico.resultado());
+            tac = new GeneradorTAC(layout).generar(arbol);
+        }
+
+        return new AnalysisResult(sinDuplicadosYOrdenados(errores), arbol, parser.getRuleNames(), tac, layout);
     }
 
     private static List<AnalysisError> sinDuplicadosYOrdenados(List<AnalysisError> errores) {

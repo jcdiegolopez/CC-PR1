@@ -1,4 +1,4 @@
-function main, 28
+function main, 32
 a = 10
 t0 = a > 5
 ifFalse t0 goto L0

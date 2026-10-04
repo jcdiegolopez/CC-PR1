@@ -1,0 +1,37 @@
+function main, 28
+t0 = new Perro, 24
+t0.patas = 4
+t0.raza = "mestizo"
+param t0
+param "Toby"
+call Animal_constructor, 2
+p = t0
+param p
+t0 = call Perro_hablar, 1
+print t0
+param p
+t0 = call Animal_describir, 1
+print t0
+a = p
+param a
+t0 = call Animal_hablar, 1
+print t0
+endfunc
+function Animal_constructor, 40
+this.nombre = nombre
+endfunc
+function Animal_hablar, 36
+t0 = this.nombre
+t0 = t0 + " hace ruido."
+return t0
+endfunc
+function Animal_describir, 36
+param this
+t0 = call Animal_hablar, 1
+return t0
+endfunc
+function Perro_hablar, 36
+t0 = this.nombre
+t0 = t0 + " ladra."
+return t0
+endfunc

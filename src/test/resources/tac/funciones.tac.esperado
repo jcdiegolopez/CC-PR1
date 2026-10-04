@@ -5,7 +5,7 @@ t0 = call suma, 2
 res = t0
 print res
 endfunc
-function suma, 28
+function suma, 36
 t0 = a + b
 return t0
 endfunc
