@@ -1,14 +1,7 @@
 package com.lexsynanalyzer.tac;
 
 import com.lexsynanalyzer.parser.LexSynAnalyzerBaseVisitor;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.AssignmentContext;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.BlockContext;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ConstantDeclarationContext;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ExpressionStatementContext;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.PrintStatementContext;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ProgramContext;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.StatementContext;
-import com.lexsynanalyzer.parser.LexSynAnalyzerParser.VariableDeclarationContext;
+import com.lexsynanalyzer.parser.LexSynAnalyzerParser.*;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.ArrayList;
@@ -16,8 +9,8 @@ import java.util.List;
 
 /**
  * Visitor raíz de la generación de código intermedio. Solo recorre y delega: las expresiones y
- * sentencias simples van a {@link ExprTAC}; el flujo de control, las funciones y las clases tienen
- * sus propios helpers (B y C) que se enchufan en {@link #visitStatement}.
+ * sentencias simples van a {@link ExprTAC}; el flujo de control a {@link ControlTAC}, las funciones
+ * y excepciones a {@link FuncionTAC}, y las clases a {@code ClaseTAC} (C).
  *
  * <p>El código de nivel superior se emite como {@code function main, N ... endfunc}; los cuerpos
  * registrados con {@link #diferir} se emiten después, cada uno completo.
@@ -29,15 +22,37 @@ public final class GeneradorTAC extends LexSynAnalyzerBaseVisitor<Void> {
     private final GeneradorEtiquetas etiquetas = new GeneradorEtiquetas();
     private final ResolvedorMemoria memoria;
     private final ExprTAC expr;
+    private final ControlTAC control;
+    private final FuncionTAC funcion;
     private final List<Runnable> diferidos = new ArrayList<>();
 
     public GeneradorTAC() {
         this(ResolvedorMemoria.SIMPLE, ExtensionExpr.NINGUNA);
     }
 
-    public GeneradorTAC(ResolvedorMemoria memoria, ExtensionExpr extension) {
+    public GeneradorTAC(ResolvedorMemoria memoria, ExtensionExpr extensionExterna) {
         this.memoria = memoria;
-        this.expr = new ExprTAC(programa, temps, etiquetas, memoria, extension);
+        this.control = new ControlTAC(programa, temps, etiquetas, null, this);
+        this.funcion = new FuncionTAC(programa, temps, etiquetas, memoria, null, this, control);
+        ExtensionExpr extensionCombinada = new ExtensionExpr() {
+            @Override
+            public String atomo(PrimaryAtomContext atomo) {
+                return extensionExterna.atomo(atomo);
+            }
+
+            @Override
+            public String llamada(String funcionNombre, CallExprContext llamadaCtx) {
+                return funcion.llamada(funcionNombre, llamadaCtx);
+            }
+
+            @Override
+            public String metodo(String objeto, String metodo, CallExprContext llamadaCtx) {
+                return extensionExterna.metodo(objeto, metodo, llamadaCtx);
+            }
+        };
+        this.expr = new ExprTAC(programa, temps, etiquetas, memoria, extensionCombinada);
+        this.control.setExpr(this.expr);
+        this.funcion.setExpr(this.expr);
     }
 
     public ProgramaTAC generar(ProgramContext programaFuente) {
@@ -64,6 +79,14 @@ public final class GeneradorTAC extends LexSynAnalyzerBaseVisitor<Void> {
 
     public ExprTAC expresiones() {
         return expr;
+    }
+
+    public ControlTAC control() {
+        return control;
+    }
+
+    public FuncionTAC funcion() {
+        return funcion;
     }
 
     @Override
@@ -97,6 +120,14 @@ public final class GeneradorTAC extends LexSynAnalyzerBaseVisitor<Void> {
             expr.visit(sentencia);
             return null;
         }
+        if (esDeControl(sentencia)) {
+            control.visit(sentencia);
+            return null;
+        }
+        if (esDeFunciones(sentencia)) {
+            funcion.visit(sentencia);
+            return null;
+        }
         throw new UnsupportedOperationException(
                 "Aún no implementado en el generador TAC: " + sentencia.getClass().getSimpleName());
     }
@@ -107,5 +138,22 @@ public final class GeneradorTAC extends LexSynAnalyzerBaseVisitor<Void> {
                 || sentencia instanceof AssignmentContext
                 || sentencia instanceof ExpressionStatementContext
                 || sentencia instanceof PrintStatementContext;
+    }
+
+    private static boolean esDeControl(ParseTree sentencia) {
+        return sentencia instanceof IfStatementContext
+                || sentencia instanceof WhileStatementContext
+                || sentencia instanceof DoWhileStatementContext
+                || sentencia instanceof ForStatementContext
+                || sentencia instanceof ForeachStatementContext
+                || sentencia instanceof SwitchStatementContext
+                || sentencia instanceof BreakStatementContext
+                || sentencia instanceof ContinueStatementContext;
+    }
+
+    private static boolean esDeFunciones(ParseTree sentencia) {
+        return sentencia instanceof FunctionDeclarationContext
+                || sentencia instanceof ReturnStatementContext
+                || sentencia instanceof TryCatchStatementContext;
     }
 }
