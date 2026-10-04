@@ -1,0 +1,11 @@
+function main, 28
+param 3
+param 4
+t0 = call suma, 2
+res = t0
+print res
+endfunc
+function suma, 28
+t0 = a + b
+return t0
+endfunc

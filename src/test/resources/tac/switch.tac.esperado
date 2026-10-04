@@ -1,0 +1,17 @@
+function main, 28
+op = 2
+r = 0
+t0 = op == 1
+if t0 goto L1
+t0 = op == 2
+if t0 goto L2
+goto L3
+L1:
+r = 10
+goto L0
+L2:
+r = 20
+L3:
+r = 30
+L0:
+endfunc

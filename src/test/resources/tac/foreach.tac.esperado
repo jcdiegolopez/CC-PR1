@@ -1,0 +1,20 @@
+function main, 36
+t0 = newarray 3
+t0[0] = 10
+t0[1] = 20
+t0[2] = 30
+nums = t0
+t0 = len nums
+t1 = 0
+L0:
+t2 = t1 < t0
+ifFalse t2 goto L2
+t2 = nums[t1]
+x = t2
+print x
+L1:
+t2 = t1 + 1
+t1 = t2
+goto L0
+L2:
+endfunc

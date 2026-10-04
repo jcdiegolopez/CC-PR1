@@ -1,0 +1,16 @@
+function main, 28
+t0 = newarray 2
+t0[0] = 1
+t0[1] = 2
+a = t0
+try L0
+t0 = a[5]
+x = t0
+print x
+endtry
+goto L1
+L0:
+catch err
+print err
+L1:
+endfunc
