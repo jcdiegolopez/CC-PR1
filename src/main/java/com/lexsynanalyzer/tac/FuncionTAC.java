@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -61,9 +62,8 @@ public final class FuncionTAC extends LexSynAnalyzerBaseVisitor<Void> {
     @Override
     public Void visitFunctionDeclaration(FunctionDeclarationContext ctx) {
         String id = ctx.Identifier().getText();
-        String nombreFuncion = pilaNombresFunciones.isEmpty()
-                ? id
-                : pilaNombresFunciones.peek() + "_" + id;
+        String nombreFuncion = memoria.etiquetaFuncion(ctx.Identifier()).orElse(
+                pilaNombresFunciones.isEmpty() ? id : pilaNombresFunciones.peek() + "_" + id);
 
         funcionesConocidas.add(nombreFuncion);
 
@@ -130,7 +130,7 @@ public final class FuncionTAC extends LexSynAnalyzerBaseVisitor<Void> {
         programa.emit(Instruccion.salto(etiquetaFin));
 
         programa.emit(Instruccion.etiqueta(etiquetaCatch));
-        String errVariable = ctx.Identifier().getText();
+        String errVariable = memoria.nombreTac(ctx.Identifier());
         programa.emit(Instruccion.capturar(errVariable));
         generador.visitBlock(ctx.block(1));
 
@@ -143,9 +143,11 @@ public final class FuncionTAC extends LexSynAnalyzerBaseVisitor<Void> {
     // ------------------------------------------------------------------
 
     public String llamada(String funcion, CallExprContext llamadaCtx) {
-        // Resolver si la función llamada es una anidada del ámbito actual
-        String nombreReal = funcion;
-        if (!pilaNombresFunciones.isEmpty()) {
+        // La etiqueta sale de la resolución por ámbito (recursión en anidadas, hermanas, llamadas
+        // antes de la declaración); sin ella, se prueba con la función que se está emitiendo.
+        Optional<String> resuelta = etiquetaResuelta(llamadaCtx);
+        String nombreReal = resuelta.orElse(funcion);
+        if (resuelta.isEmpty() && !pilaNombresFunciones.isEmpty()) {
             String candidata = pilaNombresFunciones.peek() + "_" + funcion;
             if (funcionesConocidas.contains(candidata)) {
                 nombreReal = candidata;
@@ -173,6 +175,15 @@ public final class FuncionTAC extends LexSynAnalyzerBaseVisitor<Void> {
             programa.emit(Instruccion.llamar(destino, nombreReal, numArgs));
             return destino;
         }
+    }
+
+    private Optional<String> etiquetaResuelta(CallExprContext llamada) {
+        if (llamada.getParent() instanceof LeftHandSideContext lhs
+                && lhs.primaryAtom() instanceof IdentifierExprContext id
+                && lhs.suffixOp().indexOf(llamada) == 0) {
+            return memoria.etiquetaFuncion(id.Identifier());
+        }
+        return Optional.empty();
     }
 
     private static boolean esLlamadaComoSentencia(CallExprContext llamada) {

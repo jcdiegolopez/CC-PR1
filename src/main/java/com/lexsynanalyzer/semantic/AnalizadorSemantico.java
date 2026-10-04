@@ -174,6 +174,8 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
         if (!tabla.declarar(simbolo)) {
             reportarRedeclaracion(nombre, "La función");
+        } else {
+            resultado.registrarResolucion(nombre, tabla.actual());
         }
     }
 
@@ -1083,6 +1085,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
             return TipoDato.ERROR;
         }
 
+        registrarResolucion(nombre);
         List<ExpressionContext> argumentos = argumentosDe(llamada);
         List<TipoDato> tipos = visitarArgumentos(llamada);
         List<Simbolo.Parametro> parametros = simbolo.parametros();

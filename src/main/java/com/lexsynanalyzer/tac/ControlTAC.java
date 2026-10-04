@@ -20,6 +20,7 @@ public final class ControlTAC extends LexSynAnalyzerBaseVisitor<Void> {
     private final ProgramaTAC programa;
     private final TempPool temps;
     private final GeneradorEtiquetas etiquetas;
+    private final ResolvedorMemoria memoria;
     private ExprTAC expr;
     private final GeneradorTAC generador;
 
@@ -32,10 +33,11 @@ public final class ControlTAC extends LexSynAnalyzerBaseVisitor<Void> {
     record SaltosPendientes(String breakLabel, String continueLabel, int tryDepth) {}
 
     public ControlTAC(ProgramaTAC programa, TempPool temps, GeneradorEtiquetas etiquetas,
-                      ExprTAC expr, GeneradorTAC generador) {
+                      ResolvedorMemoria memoria, ExprTAC expr, GeneradorTAC generador) {
         this.programa = programa;
         this.temps = temps;
         this.etiquetas = etiquetas;
+        this.memoria = memoria;
         this.expr = expr;
         this.generador = generador;
     }
@@ -215,7 +217,13 @@ public final class ControlTAC extends LexSynAnalyzerBaseVisitor<Void> {
     @Override
     public Void visitForeachStatement(ForeachStatementContext ctx) {
         String arreglo = expr.visit(ctx.expression());
-        String variable = ctx.Identifier().getText();
+        if (!TempPool.esTemporal(arreglo)) {
+            // Se itera sobre una copia: si el cuerpo reasigna la variable, el ciclo no cambia de arreglo.
+            String copia = temps.nuevo();
+            programa.emit(Instruccion.asignar(copia, arreglo));
+            arreglo = copia;
+        }
+        String variable = memoria.nombreTac(ctx.Identifier());
 
         String longitud = temps.nuevo();
         String indice = temps.nuevo();

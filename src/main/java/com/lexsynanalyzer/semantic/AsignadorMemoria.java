@@ -3,6 +3,7 @@ package com.lexsynanalyzer.semantic;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,6 +43,9 @@ public final class AsignadorMemoria {
     private final Set<String> nombresFuente = new HashSet<>();
     private final List<Unidad> unidades = new ArrayList<>();
     private final List<Layout.Variable> globales = new ArrayList<>();
+    private final Set<String> etiquetasUsadas = new HashSet<>(Set.of("main"));
+    /** Por cada entorno, la etiqueta de cada función declarada directamente en él. */
+    private final Map<Entorno, Map<String, String>> etiquetasFunciones = new IdentityHashMap<>();
     private final Entorno global;
     private int offsetGlobal;
 
@@ -53,7 +57,7 @@ public final class AsignadorMemoria {
         AsignadorMemoria asignador = new AsignadorMemoria(semantico.tabla().global());
         Map<String, Layout.Frame> frames = asignador.asignarFrames();
         Map<String, Layout.ClaseLayout> clases = asignador.asignarClases();
-        return new Layout(semantico, asignador.globales, frames, clases);
+        return new Layout(semantico, asignador.globales, frames, clases, asignador.etiquetasFunciones);
     }
 
     /** {@code integer} y {@code boolean} ocupan 4 bytes; cadenas, arreglos y objetos son referencias de 8. */
@@ -109,7 +113,12 @@ public final class AsignadorMemoria {
 
         for (Entorno hijo : entorno.hijos()) {
             if (esFuncion(hijo) || esMetodo(hijo)) {
-                String etiqueta = etiquetaDe(hijo, funcionPadre);
+                String etiqueta = etiquetaUnica(etiquetaDe(hijo, funcionPadre));
+                if (esFuncion(hijo)) {
+                    // La función se declara en el mismo entorno del que cuelga su cuerpo.
+                    etiquetasFunciones.computeIfAbsent(entorno, e -> new HashMap<>())
+                            .put(nombreDeEntorno(hijo), etiqueta);
+                }
                 Unidad nueva = new Unidad(etiqueta);
                 unidades.add(nueva);
                 if (esMetodo(hijo)) {
@@ -176,7 +185,16 @@ public final class AsignadorMemoria {
         }
     }
 
-    /** Misma regla que el generador: {@code f}, {@code padre_hijo} o {@code Clase_metodo}. */
+    /** Dos funciones de ámbitos distintos con el mismo nombre no pueden compartir etiqueta. */
+    private String etiquetaUnica(String etiqueta) {
+        String candidata = etiqueta;
+        for (int i = 1; !etiquetasUsadas.add(candidata); i++) {
+            candidata = etiqueta + "_" + i;
+        }
+        return candidata;
+    }
+
+    /** {@code f}, {@code padre_hijo} (anidada en otra función) o {@code Clase_metodo}. */
     private static String etiquetaDe(Entorno entorno, String funcionPadre) {
         String nombre = nombreDeEntorno(entorno);
         if (esMetodo(entorno)) {

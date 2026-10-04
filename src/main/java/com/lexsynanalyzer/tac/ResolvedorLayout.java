@@ -3,6 +3,8 @@ package com.lexsynanalyzer.tac;
 import com.lexsynanalyzer.semantic.Layout;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.Optional;
+
 /**
  * {@link ResolvedorMemoria} respaldado por el {@link Layout} de {@code AsignadorMemoria}: tamaños de
  * frame reales y nombres únicos para variables sombreadas. Lo que no es una variable con dirección
@@ -29,5 +31,10 @@ public final class ResolvedorLayout implements ResolvedorMemoria {
     public String nombreTac(TerminalNode identificador) {
         return layout.nombreTac(identificador.getSymbol())
                 .orElseGet(() -> SIMPLE.nombreTac(identificador));
+    }
+
+    @Override
+    public Optional<String> etiquetaFuncion(TerminalNode identificador) {
+        return layout.etiquetaFuncion(identificador.getSymbol());
     }
 }

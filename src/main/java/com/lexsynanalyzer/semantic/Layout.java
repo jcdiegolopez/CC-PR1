@@ -4,6 +4,7 @@ import org.antlr.v4.runtime.Token;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,13 +43,15 @@ public final class Layout {
     private final List<Variable> globales;
     private final Map<String, Frame> frames;
     private final Map<String, ClaseLayout> clases;
+    private final Map<Entorno, Map<String, String>> etiquetasFunciones;
 
     Layout(ResultadoSemantico semantico, List<Variable> globales, Map<String, Frame> frames,
-           Map<String, ClaseLayout> clases) {
+           Map<String, ClaseLayout> clases, Map<Entorno, Map<String, String>> etiquetasFunciones) {
         this.semantico = semantico;
         this.globales = List.copyOf(globales);
         this.frames = Collections.unmodifiableMap(frames);
         this.clases = Collections.unmodifiableMap(clases);
+        this.etiquetasFunciones = new IdentityHashMap<>(etiquetasFunciones);
     }
 
     public ResultadoSemantico semantico() {
@@ -80,6 +83,17 @@ public final class Layout {
         return semantico.entornoDeclarante(identificador)
                 .map(entorno -> entorno.direcciones().get(identificador.getText()))
                 .map(Direccion::nombreTac);
+    }
+
+    /**
+     * Etiqueta TAC de la función que nombra {@code identificador}, en su declaración o en una
+     * llamada: {@code f}, {@code padre_hijo}, o con sufijo ({@code h_1}) si dos funciones de
+     * ámbitos distintos comparten nombre.
+     */
+    public Optional<String> etiquetaFuncion(Token identificador) {
+        return semantico.entornoDeclarante(identificador)
+                .map(etiquetasFunciones::get)
+                .map(etiquetas -> etiquetas.get(identificador.getText()));
     }
 
     public Optional<ClaseLayout> clase(String nombre) {

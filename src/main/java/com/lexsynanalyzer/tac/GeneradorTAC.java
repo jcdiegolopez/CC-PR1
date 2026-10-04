@@ -40,7 +40,7 @@ public final class GeneradorTAC extends LexSynAnalyzerBaseVisitor<Void> {
 
     private GeneradorTAC(ResolvedorMemoria memoria, Layout layout) {
         this.memoria = memoria;
-        this.control = new ControlTAC(programa, temps, etiquetas, null, this);
+        this.control = new ControlTAC(programa, temps, etiquetas, memoria, null, this);
         this.funcion = new FuncionTAC(programa, temps, etiquetas, memoria, null, this, control);
         this.clase = new ClaseTAC(programa, temps, memoria, layout, this);
         ExtensionExpr extensionCombinada = new ExtensionExpr() {

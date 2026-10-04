@@ -41,7 +41,7 @@ public final class ResultadoSemantico {
         return receptores.get(accesoPropiedad);
     }
 
-    /** Entorno que declara la variable nombrada por {@code identificador} (declaración o uso). */
+    /** Entorno que declara la variable o función nombrada por {@code identificador} (declaración o uso). */
     public Optional<Entorno> entornoDeclarante(Token identificador) {
         return Optional.ofNullable(resoluciones.get(identificador));
     }

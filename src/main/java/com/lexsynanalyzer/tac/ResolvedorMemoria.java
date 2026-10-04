@@ -2,6 +2,7 @@ package com.lexsynanalyzer.tac;
 
 import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
@@ -15,6 +16,14 @@ public interface ResolvedorMemoria {
 
     /** Nombre con el que aparece en el TAC el identificador de una declaración o de un uso. */
     String nombreTac(TerminalNode identificador);
+
+    /**
+     * Etiqueta de la función que nombra {@code identificador} (en su declaración o en una llamada),
+     * resuelta por ámbito. Vacío si no se conoce: el generador decide por su cuenta.
+     */
+    default Optional<String> etiquetaFuncion(TerminalNode identificador) {
+        return Optional.empty();
+    }
 
     /** Mientras no exista {@code AsignadorMemoria}: nombre del código fuente y frame de solo cabecera. */
     ResolvedorMemoria SIMPLE = new ResolvedorMemoria() {
