@@ -38,6 +38,8 @@ public class LexSynAnalyzerGui extends JFrame {
     private final JTextArea lineNumbersArea;
     private final ResultsTablePanel resultsPanel;
     private final SyntaxTreePanel syntaxTreePanel;
+    private final TacPanel tacPanel;
+    private final SimbolosPanel simbolosPanel;
     private final JTabbedPane tabbedPane;
     private final JButton btnAbrir;
     private final JButton btnGuardar;
@@ -50,7 +52,7 @@ public class LexSynAnalyzerGui extends JFrame {
     private boolean hasUnsavedChanges;
 
     public LexSynAnalyzerGui() {
-        super("Compiscript — Analizador Léxico, Sintáctico y Semántico (ANTLR4)");
+        super("Compiscript — Analizador y Generador de Código Intermedio (ANTLR4)");
         UIManager.put("Button.disabledText", Color.WHITE);
         UIManager.put("TabbedPane.selected", COLOR_PANEL);
         UIManager.put("TabbedPane.background", COLOR_TOOLBAR);
@@ -142,6 +144,8 @@ public class LexSynAnalyzerGui extends JFrame {
         });
 
         syntaxTreePanel = new SyntaxTreePanel();
+        tacPanel = new TacPanel();
+        simbolosPanel = new SimbolosPanel();
 
         tabbedPane = new JTabbedPane();
         tabbedPane.setUI(new DarkTabbedPaneUI());
@@ -152,6 +156,8 @@ public class LexSynAnalyzerGui extends JFrame {
 
         tabbedPane.addTab("Tabla de Errores y Diagnósticos", resultsPanel);
         tabbedPane.addTab("Árbol Sintáctico (ParseTree)", syntaxTreePanel);
+        tabbedPane.addTab("Código Intermedio (TAC)", tacPanel);
+        tabbedPane.addTab("Tabla de Símbolos / Registros de Activación", simbolosPanel);
 
         // 4. SplitPane Redimensionable (Vertical: Editor arriba, Pestañas abajo)
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editorContainer, tabbedPane);
@@ -226,7 +232,7 @@ public class LexSynAnalyzerGui extends JFrame {
         panel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, COLOR_BORDER));
 
         // Título de la aplicación
-        JLabel lblTitle = new JLabel("  COMPISCRIPT IDE  |  Analizador Léxico, Sintáctico y Semántico");
+        JLabel lblTitle = new JLabel("  COMPISCRIPT IDE  |  Análisis y Código Intermedio");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
         lblTitle.setForeground(COLOR_TEXT);
 
@@ -239,7 +245,7 @@ public class LexSynAnalyzerGui extends JFrame {
         JButton btnSave = crearBoton("Guardar", COLOR_ACCENT, COLOR_ACCENT_HOVER,
                 "Guardar los cambios en el archivo actual (Ctrl+S)");
         JButton btnRun = crearBoton("Analizar", COLOR_ACCENT, COLOR_ACCENT_HOVER,
-                "Ejecutar el análisis léxico, sintáctico y semántico sobre el archivo cargado");
+                "Ejecutar el análisis y generar el código intermedio del archivo cargado");
         JButton btnClear = crearBoton("Limpiar", COLOR_ACCENT, COLOR_ACCENT_HOVER,
                 "Limpiar el editor de código, la tabla de resultados y el árbol sintáctico");
 
@@ -320,6 +326,14 @@ public class LexSynAnalyzerGui extends JFrame {
         return syntaxTreePanel;
     }
 
+    public TacPanel getTacPanel() {
+        return tacPanel;
+    }
+
+    public SimbolosPanel getSimbolosPanel() {
+        return simbolosPanel;
+    }
+
     public JTabbedPane getTabbedPane() {
         return tabbedPane;
     }
@@ -349,6 +363,8 @@ public class LexSynAnalyzerGui extends JFrame {
                 lblStatusBar.setText(" Archivo cargado: " + archivoActual.getAbsolutePath());
                 resultsPanel.limpiar();
                 syntaxTreePanel.limpiar();
+                tacPanel.limpiar();
+                simbolosPanel.limpiar();
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this, "Error al leer el archivo:\n" + ex.getMessage(),
                         "Error de Lectura", JOptionPane.ERROR_MESSAGE);
@@ -369,7 +385,7 @@ public class LexSynAnalyzerGui extends JFrame {
 
         actualizarEstadoBotonAnalizar(false);
         btnAbrir.setEnabled(false);
-        lblStatusBar.setText(" [BUSY] Ejecutando análisis léxico, sintáctico y semántico...");
+        lblStatusBar.setText(" [BUSY] Ejecutando análisis y generación de código intermedio...");
 
         SwingWorker<AnalysisResult, Void> worker = new SwingWorker<>() {
             @Override
@@ -396,6 +412,14 @@ public class LexSynAnalyzerGui extends JFrame {
                         tabbedPane.setTitleAt(1, "Árbol Sintáctico (ParseTree)");
                     } else {
                         syntaxTreePanel.limpiar();
+                    }
+
+                    if (result.tieneTac()) {
+                        tacPanel.mostrarTac(result.tac());
+                        simbolosPanel.mostrar(result.layout(), result.tac());
+                    } else {
+                        tacPanel.mostrarSinTac();
+                        simbolosPanel.mostrarSinDatos();
                     }
                 } catch (InterruptedException | ExecutionException ex) {
                     JOptionPane.showMessageDialog(LexSynAnalyzerGui.this,
@@ -446,6 +470,8 @@ public class LexSynAnalyzerGui extends JFrame {
         actualizarNumerosDeLinea();
         resultsPanel.limpiar();
         syntaxTreePanel.limpiar();
+        tacPanel.limpiar();
+        simbolosPanel.limpiar();
         tabbedPane.setTitleAt(0, "Tabla de Errores y Diagnósticos");
         tabbedPane.setTitleAt(1, "Árbol Sintáctico (ParseTree)");
         actualizarEstadoBotonAnalizar(false);
