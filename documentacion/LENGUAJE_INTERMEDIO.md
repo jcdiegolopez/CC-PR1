@@ -18,7 +18,7 @@ genera TAC.
 | Retorno | `return a` · `return` | `return t3` |
 | Arreglos | `t = newarray n` · `t = a[i]` · `a[i] = b` · `t = len a` | `t0 = a[i]` |
 | Objetos | `t = new Clase, size` · `t = obj.campo` · `obj.campo = b` | `t0 = new Perro, 24` |
-| Excepciones | `try Lcatch` · `endtry` · `catch e` | ver sección de B |
+| Excepciones | `try Lcatch` · `endtry` · `catch e` | ver sección 4 |
 | Salida | `print a` | `print t0` |
 
 Un operando es un **literal** (`5`, `"hola"`, `true`, `false`, `null`), una **variable** o un
@@ -125,8 +125,248 @@ fuera de rango es un error de ejecución, no de compilación.
 
 ## 4. Flujo de control, funciones y excepciones
 
-*(Sección de la Persona B: if/while/do/for/foreach/switch con fall-through, funciones, recursión,
-try/catch.)*
+Todas las condiciones se evalúan a un operando y se saltan con `ifFalse` (o `if` en `do-while`). Las
+etiquetas `L0, L1, …` son únicas en todo el programa.
+
+### `if` / `else`
+
+```
+if (a > 5) { a = 0; } else { a = 1; }
+```
+```
+t0 = a > 5
+ifFalse t0 goto L0       // falso: rama else
+a = 0
+goto L1
+L0:
+a = 1
+L1:
+```
+
+Sin `else` solo se emite `ifFalse c goto Lfin`, el bloque y `Lfin:`.
+
+### `while`, `do-while` y `for`
+
+Cada ciclo tiene una etiqueta de **inicio**, una de **continue** y una de **fin**. `break` salta al
+fin y `continue` a la etiqueta de continue:
+
+| Ciclo | `continue` salta a |
+|---|---|
+| `while` | el inicio (se reevalúa la condición) |
+| `do-while` | la condición, al final del cuerpo |
+| `for` | el incremento |
+
+```
+while (a > 0) {                     L0:
+    if (a == 1) { break; }          t0 = a > 0
+    a = a - 1;                      ifFalse t0 goto L1
+}                                   t0 = a == 1
+                                    ifFalse t0 goto L2
+                                    goto L1          // break
+                                    L2:
+                                    t0 = a - 1
+                                    a = t0
+                                    goto L0
+                                    L1:
+```
+
+`do-while` ejecuta el cuerpo primero y repite con `if`:
+
+```
+do { i = i + 1; } while (i < 3);    L0:
+                                    t0 = i + 1
+                                    i = t0
+                                    L1:              // continue
+                                    t0 = i < 3
+                                    if t0 goto L0
+                                    L2:              // break
+```
+
+`for` emite la inicialización una sola vez, luego condición, cuerpo, incremento y salto al inicio.
+La variable declarada en el `for` es local de su ámbito:
+
+```
+for (let i: integer = 0; i < 3; i = i + 1) { print(i); }
+```
+```
+i = 0
+L0:
+t0 = i < 3
+ifFalse t0 goto L2
+print i
+L1:                      // continue → incremento
+t0 = i + 1
+i = t0
+goto L0
+L2:
+```
+
+### `foreach`
+
+Se recorre con un índice, la longitud (`len`) y una lectura `a[i]`. El arreglo se copia primero a un
+temporal, así que si el cuerpo reasigna la variable el ciclo no cambia de arreglo. El arreglo, la
+longitud y el índice **no se liberan** hasta salir del ciclo. Sobre un `string` es igual y cada
+elemento es un `string` de un carácter.
+
+```
+foreach (x in nums) { print(x); }
+```
+```
+t0 = nums                // copia del arreglo
+t1 = len t0
+t2 = 0                   // índice
+L0:
+t3 = t2 < t1
+ifFalse t3 goto L2
+t3 = t0[t2]
+x = t3
+print x
+L1:                      // continue
+t3 = t2 + 1
+t2 = t3
+goto L0
+L2:
+```
+
+### `switch` con fall-through
+
+El selector se evalúa **una vez** y su temporal no se libera hasta el final. Primero va la cadena de
+comparaciones, después los cuerpos en orden. Un caso sin `break` **continúa** con el siguiente
+(fall-through); `break` salta al fin. Si ningún caso coincide se salta al `default` o, si no hay, al
+fin.
+
+```
+switch (op) {                       t0 = op == 1
+    case 1: r = 10; break;          if t0 goto L1
+    case 2: r = 20;                 t0 = op == 2
+    default: r = 30;                if t0 goto L2
+}                                   goto L3          // default
+                                    L1:
+                                    r = 10
+                                    goto L0          // break
+                                    L2:
+                                    r = 20           // sin break: sigue al default
+                                    L3:
+                                    r = 30
+                                    L0:
+```
+
+### Funciones y parámetros
+
+Cada función se emite después de `main` como `function nombre, frameSize … endfunc`; el tamaño se
+completa al final, cuando se conoce cuántos temporales usó el cuerpo. Los parámetros no se copian:
+viven en el registro de activación (sección 5) y se usan por su nombre.
+
+Una llamada evalúa **todos** los argumentos primero y luego emite los `param` en orden, seguidos de
+`call f, n`. Si el valor se usa, queda en un temporal (`t = call f, n`); como sentencia sola se emite
+`call f, n` sin destino.
+
+```
+function saludar(n: string) { print("hola " + n); }
+saludar("Ana");
+```
+```
+function main, 24
+param "Ana"
+call saludar, 1          // sentencia: sin destino
+endfunc
+function saludar, 36
+t0 = "hola " + n
+print t0
+endfunc
+```
+
+`return e` emite `return x` y `return;` emite `return`.
+
+### Recursividad
+
+Una llamada recursiva es una llamada normal: el registro de activación de cada invocación es
+independiente, así que los temporales del llamador se conservan durante la llamada.
+
+```
+function fib(n: integer): integer {
+    if (n < 2) { return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+```
+```
+function fib, 36
+t0 = n < 2
+ifFalse t0 goto L0
+return n
+L0:
+t0 = n - 1
+param t0
+t0 = call fib, 1
+t1 = n - 2
+param t1
+t1 = call fib, 1
+t0 = t0 + t1
+return t0
+endfunc
+```
+
+### Funciones anidadas
+
+Una función declarada dentro de otra se **eleva** a nivel superior con la etiqueta `padre_hijo`. La
+etiqueta se resuelve por ámbito, así que funciona en la recursión de la anidada, entre hermanas y en
+llamadas anteriores a la declaración. Dos funciones homónimas de ámbitos distintos reciben etiquetas
+distintas (`h`, `h_1`).
+
+**Limitación documentada:** el registro de activación reserva el enlace de acceso (offset 16), pero
+una función anidada **no captura** las variables locales de su padre.
+
+### `try` / `catch`
+
+El lenguaje no tiene `throw`. Lo que dispara el `catch` son errores de ejecución **implícitos**:
+índice fuera de rango en `a[i]` y división o módulo por cero. `try Lcatch` instala el manejador,
+`endtry` lo quita y `catch e` recibe el mensaje de error como `string`.
+
+```
+try { let x: integer = a[5]; print(x); } catch (err) { print(err); }
+```
+```
+try L0
+t0 = a[5]
+x = t0
+print x
+endtry
+goto L1
+L0:
+catch err
+print err
+L1:
+```
+
+Un `return`, `break` o `continue` que sale de uno o más `try` emite un `endtry` por cada uno **antes**
+del salto; si no, el manejador quedaría activo:
+
+```
+while (x < 3) {
+    try { x = x + 1; if (x == 2) { continue; } } catch (e) { print(e); }
+}
+```
+```
+L0:
+t0 = x < 3
+ifFalse t0 goto L1
+try L2
+t0 = x + 1
+x = t0
+t0 = x == 2
+ifFalse t0 goto L4
+endtry                   // sale del try antes del continue
+goto L0
+L4:
+endtry
+goto L3
+L2:
+catch e
+print e
+L3:
+goto L0
+L1:
+```
 
 ## 5. Memoria, clases y objetos
 

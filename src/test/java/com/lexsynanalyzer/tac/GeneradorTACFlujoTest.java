@@ -2,10 +2,12 @@ package com.lexsynanalyzer.tac;
 
 import com.lexsynanalyzer.analyzer.AnalysisResult;
 import com.lexsynanalyzer.analyzer.LexSynAnalyzer;
+import com.lexsynanalyzer.analyzer.TipoError;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.ProgramContext;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,6 +18,7 @@ class GeneradorTACFlujoTest {
     @ParameterizedTest
     @ValueSource(strings = {
             "if_while_for",
+            "do_while_continue",
             "foreach",
             "switch",
             "funciones",
@@ -26,7 +29,33 @@ class GeneradorTACFlujoTest {
         assertEquals(TacTestSupport.esperado(caso), TacTestSupport.generar(caso).toString().replace("\r\n", "\n"));
     }
 
+    /** Un caso fallido por funcionalidad: con el error semántico no se genera TAC. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', quoteCharacter = '"', value = {
+            "error_control   | La condición del 'while'",
+            "error_foreach   | requiere un arreglo o una cadena",
+            "error_switch    | El valor del 'case'",
+            "error_funciones | espera 2 argumento(s)",
+            "error_recursion | El parámetro 'n' de 'factorial'",
+            "error_try_catch | El identificador 'err' no está declarado",
+    })
+    void conErrores_noHayTacYSeReportaElError(String caso, String mensaje) {
+        AnalysisResult resultado = TacTestSupport.analizar(caso);
 
+        assertTrue(resultado.tac().estaVacio());
+        assertTrue(resultado.errores().stream()
+                        .anyMatch(e -> e.tipo() == TipoError.SEMANTICO && e.descripcion().contains(mensaje)),
+                () -> "Se esperaba un error con '" + mensaje + "': " + resultado.errores());
+    }
+
+    @Test
+    @DisplayName("continue en do-while salta a la condición y en for al incremento")
+    void continue_saltaALaCondicionOAlIncremento() {
+        String s = TacTestSupport.generar("do_while_continue").toString();
+
+        assertTrue(s.contains("goto L1\nL3:\nt0 = suma + i\nsuma = t0\nL1:\nt0 = i < 10\nif t0 goto L0"), s);
+        assertTrue(s.contains("goto L5\nL7:\nprint j\nL5:\nt0 = j + 1"), s);
+    }
 
     @Test
     @DisplayName("Llamada como sentencia pura no genera temporal de destino")

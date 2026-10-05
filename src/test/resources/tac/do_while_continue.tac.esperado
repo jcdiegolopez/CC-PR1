@@ -1,0 +1,33 @@
+function main, 32
+i = 0
+suma = 0
+L0:
+t0 = i + 1
+i = t0
+t0 = i % 2
+t0 = t0 == 0
+ifFalse t0 goto L3
+goto L1
+L3:
+t0 = suma + i
+suma = t0
+L1:
+t0 = i < 10
+if t0 goto L0
+L2:
+j = 0
+L4:
+t0 = j < 5
+ifFalse t0 goto L6
+t0 = j == 3
+ifFalse t0 goto L7
+goto L5
+L7:
+print j
+L5:
+t0 = j + 1
+j = t0
+goto L4
+L6:
+print suma
+endfunc
