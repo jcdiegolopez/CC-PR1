@@ -213,6 +213,9 @@ temporal `tk` en `tamanoBase + 4k($fp)`), el prólogo y el epílogo, y una versi
 que sigue el contrato §3.3, mientras no existan `Ubicaciones`, `MarcoActivacion` y `TraductorLlamadas`.
 No tiene enlace de acceso: una función anidada no puede leer las locales de la que la contiene.
 
+`bash tools/probar_mars.sh` corre en MARS todos los `.asm` de `target/asm/` (después de `mvn test`).
+Cómo conectan B y C sus traductores: `INTEGRACION_MIPS.md`.
+
 ## 7. Limitaciones conocidas
 
 - Un entero literal que no cabe en 32 bits se reduce a 32 bits (`2147483648` es `-2147483648`), igual que
