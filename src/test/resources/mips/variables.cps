@@ -1,0 +1,15 @@
+let a: integer = 5;
+const b: integer = 7;
+var c: integer = a;
+c = c + b;
+let t0: integer = 3;
+let s: string = "hola";
+let v: boolean = true;
+let x: integer = c = 20;
+print(a);
+print(b);
+print(c);
+print(t0);
+print(s);
+print(v);
+print(x);

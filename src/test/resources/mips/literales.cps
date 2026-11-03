@@ -1,0 +1,10 @@
+print(70000);
+print(2147483647);
+print(-2147483648);
+print(2147483647 + 1);
+print(65536 * 65536);
+print(-70000 / 7);
+let grande: integer = 123456789;
+print(grande * 10);
+print(grande * 100);
+print(-1);
