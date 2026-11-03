@@ -8,7 +8,7 @@ import java.util.Objects;
  * tiene el valor correcto, así que no puede equivocarse en saltos, llamadas ni {@code catch}.
  *
  * <p>Sirve como referencia: todo programa debe dar la misma salida con este asignador y con
- * {@code GetReg}. Dentro de una instrucción TAC reparte {@code $t0}, {@code $t1}, … en orden.
+ * {@link GetReg}. Dentro de una instrucción TAC reparte {@code $t0}, {@code $t1}, … en orden.
  */
 public final class RegistrosIngenuos implements AsignadorRegistros {
 
@@ -48,6 +48,11 @@ public final class RegistrosIngenuos implements AsignadorRegistros {
     }
 
     @Override
+    public void copia(String destino, String origen) {
+        definido(destino, leer(origen));
+    }
+
+    @Override
     public void siguienteInstruccion() {
         siguiente = 0;
     }
@@ -60,6 +65,11 @@ public final class RegistrosIngenuos implements AsignadorRegistros {
     /** No hace nada: ningún valor vive en un registro entre instrucciones. */
     @Override
     public void antesDeLlamada() {
+    }
+
+    /** No hace nada: memoria siempre está al día. */
+    @Override
+    public void antesDePosibleExcepcion() {
     }
 
     private String tomarRegistro() {

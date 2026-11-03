@@ -87,9 +87,17 @@ class RegistrosIngenuosTest {
     }
 
     @Test
+    void copiaCargaYGuardaEnseguida() {
+        regs.copia("x", "a");
+
+        assertEquals("lw $t0, 24($fp)\nsw $t0, g_x", texto());
+    }
+
+    @Test
     void finDeBloqueYAntesDeLlamadaNoEmitenNada() {
         regs.finDeBloque();
         regs.antesDeLlamada();
+        regs.antesDePosibleExcepcion();
 
         assertTrue(programa.estaVacio());
     }
