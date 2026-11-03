@@ -104,7 +104,7 @@ class GeneradorTACRegresionTest {
                 """);
 
         assertTrue(tac.contains("catch err_1\nprint err_1"), tac);
-        assertTrue(tac.endsWith("L1:\nprint err\nendfunc"), tac);
+        assertTrue(tac.endsWith("L1:\nprints err\nendfunc"), tac);
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.lexsynanalyzer.tac;
 
+import com.lexsynanalyzer.semantic.TipoDato;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.Optional;
@@ -22,6 +24,14 @@ public interface ResolvedorMemoria {
      * resuelta por ámbito. Vacío si no se conoce: el generador decide por su cuenta.
      */
     default Optional<String> etiquetaFuncion(TerminalNode identificador) {
+        return Optional.empty();
+    }
+
+    /**
+     * Tipo que el análisis semántico calculó para {@code nodo}. Vacío si no se conoce: el generador
+     * emite entonces la instrucción sin tipo ({@code +}, {@code ==}, {@code print}).
+     */
+    default Optional<TipoDato> tipo(ParseTree nodo) {
         return Optional.empty();
     }
 

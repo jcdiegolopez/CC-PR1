@@ -2,7 +2,9 @@ package com.lexsynanalyzer.tac;
 
 import com.lexsynanalyzer.parser.LexSynAnalyzerBaseVisitor;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.*;
+import com.lexsynanalyzer.semantic.TipoDato;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.List;
@@ -14,6 +16,10 @@ import java.util.List;
  * variable o un temporal. Quien consume el operando es quien lo libera ({@link TempPool#liberar}
  * ignora lo que no sea un temporal). En las operaciones se liberan los operandos <b>antes</b> de
  * pedir el temporal del resultado, para reutilizarlos.
+ *
+ * <p>Donde el tipo cambia el código máquina, la instrucción lleva el tipo: {@code concat},
+ * {@code streq}/{@code strne} y {@code prints}/{@code printb}. El tipo sale del análisis semántico
+ * ({@link ResolvedorMemoria#tipo}); si no se conoce, se emite la instrucción entera de siempre.
  */
 public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
 
@@ -80,9 +86,30 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
     @Override
     public String visitPrintStatement(PrintStatementContext ctx) {
         String v = visit(ctx.expression());
-        programa.emit(Instruccion.imprimir(v));
+        programa.emit(switch (clase(ctx.expression())) {
+            case STRING -> Instruccion.imprimirString(v);
+            case BOOLEAN -> Instruccion.imprimirBooleano(v);
+            default -> Instruccion.imprimir(v);
+        });
         temps.liberar(v);
         return null;
+    }
+
+    /**
+     * Clase del tipo semántico de {@code nodo}; {@code DESCONOCIDO} si no se sabe. El semántico no
+     * registra el tipo de todos los nodos de envoltura (por ejemplo la {@code expression} de un
+     * {@code print}), así que se baja por los hijos únicos hasta encontrar uno con tipo.
+     */
+    private TipoDato.Clase clase(ParseTree nodo) {
+        ParseTree actual = nodo;
+        while (actual != null) {
+            var tipo = memoria.tipo(actual);
+            if (tipo.isPresent()) {
+                return tipo.get().clase();
+            }
+            actual = actual.getChildCount() == 1 ? actual.getChild(0) : null;
+        }
+        return TipoDato.Clase.DESCONOCIDO;
     }
 
     // --- Asignación como expresión ---
@@ -218,19 +245,49 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
         return binarias(ctx);
     }
 
-    /** Operadores binarios asociativos a la izquierda: {@code operando (op operando)*}. */
+    /**
+     * Operadores binarios asociativos a la izquierda: {@code operando (op operando)*}.
+     *
+     * <p>El semántico solo acepta {@code +} entre dos enteros o entre dos strings, así que si el
+     * primer operando es string toda la cadena de {@code +} es concatenación. En {@code ==}/{@code !=}
+     * solo el primer par puede ser de strings: desde el segundo, el izquierdo ya es booleano.
+     */
     private String binarias(ParserRuleContext ctx) {
         String izquierda = visit(ctx.getChild(0));
+        boolean izquierdaEsString = clase(ctx.getChild(0)) == TipoDato.Clase.STRING;
         for (int i = 1; i < ctx.getChildCount(); i += 2) {
             String operador = ctx.getChild(i).getText();
+            boolean derechaEsString = clase(ctx.getChild(i + 1)) == TipoDato.Clase.STRING;
             String derecha = visit(ctx.getChild(i + 1));
             temps.liberar(izquierda);
             temps.liberar(derecha);
             String resultado = temps.nuevo();
-            programa.emit(Instruccion.binaria(resultado, izquierda, operador, derecha));
+            programa.emit(instruccionBinaria(resultado, izquierda, operador, derecha,
+                    izquierdaEsString && derechaEsString));
             izquierda = resultado;
+            izquierdaEsString = izquierdaEsString && derechaEsString && "+".equals(operador);
         }
         return izquierda;
+    }
+
+    private static Instruccion instruccionBinaria(String resultado, String izquierda, String operador,
+                                                  String derecha, boolean entreStrings) {
+        if (entreStrings) {
+            switch (operador) {
+                case "+" -> {
+                    return Instruccion.concat(resultado, izquierda, derecha);
+                }
+                case "==" -> {
+                    return Instruccion.streq(resultado, izquierda, derecha);
+                }
+                case "!=" -> {
+                    return Instruccion.strne(resultado, izquierda, derecha);
+                }
+                default -> {
+                }
+            }
+        }
+        return Instruccion.binaria(resultado, izquierda, operador, derecha);
     }
 
     @Override

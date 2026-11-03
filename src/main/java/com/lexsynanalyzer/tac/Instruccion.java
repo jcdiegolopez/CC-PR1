@@ -44,6 +44,14 @@ public record Instruccion(String op, String a1, String a2, String res) {
     public static final String OP_FIN_TRY = "endtry";
     public static final String OP_CATCH = "catch";
     public static final String OP_PRINT = "print";
+    public static final String OP_PRINT_CADENA = "prints";
+    public static final String OP_PRINT_BOOLEANO = "printb";
+    public static final String OP_CONCAT = "concat";
+    public static final String OP_STREQ = "streq";
+    public static final String OP_STRNE = "strne";
+
+    /** Operaciones sobre strings con dos operandos: {@code t = op a, b}. */
+    public static final Set<String> OPERACIONES_CADENA = Set.of(OP_CONCAT, OP_STREQ, OP_STRNE);
 
     /** Operadores binarios válidos; su mnemónico es el propio símbolo. */
     public static final Set<String> OPERADORES_BINARIOS =
@@ -160,8 +168,31 @@ public record Instruccion(String op, String a1, String a2, String res) {
         return new Instruccion(OP_CATCH, variable, null, null);
     }
 
+    /** {@code print} de un entero (o de un valor sin tipo conocido). */
     public static Instruccion imprimir(String valor) {
         return new Instruccion(OP_PRINT, valor, null, null);
+    }
+
+    public static Instruccion imprimirString(String valor) {
+        return new Instruccion(OP_PRINT_CADENA, valor, null, null);
+    }
+
+    public static Instruccion imprimirBooleano(String valor) {
+        return new Instruccion(OP_PRINT_BOOLEANO, valor, null, null);
+    }
+
+    /** {@code +} entre strings: crea un string nuevo. */
+    public static Instruccion concat(String destino, String izquierda, String derecha) {
+        return new Instruccion(OP_CONCAT, izquierda, derecha, destino);
+    }
+
+    /** {@code ==} entre strings: compara el contenido, no la dirección. */
+    public static Instruccion streq(String destino, String izquierda, String derecha) {
+        return new Instruccion(OP_STREQ, izquierda, derecha, destino);
+    }
+
+    public static Instruccion strne(String destino, String izquierda, String derecha) {
+        return new Instruccion(OP_STRNE, izquierda, derecha, destino);
     }
 
     public boolean esEtiqueta() {
@@ -194,6 +225,9 @@ public record Instruccion(String op, String a1, String a2, String res) {
             case OP_FIN_TRY -> "endtry";
             case OP_CATCH -> "catch " + a1;
             case OP_PRINT -> "print " + a1;
+            case OP_PRINT_CADENA -> "prints " + a1;
+            case OP_PRINT_BOOLEANO -> "printb " + a1;
+            case OP_CONCAT, OP_STREQ, OP_STRNE -> res + " = " + op + " " + a1 + ", " + a2;
             default -> {
                 if (OPERADORES_BINARIOS.contains(op)) {
                     yield res + " = " + a1 + " " + op + " " + a2;

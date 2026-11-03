@@ -19,7 +19,8 @@ genera TAC.
 | Arreglos | `t = newarray n` · `t = a[i]` · `a[i] = b` · `t = len a` | `t0 = a[i]` |
 | Objetos | `t = new Clase, size` · `t = obj.campo` · `obj.campo = b` | `t0 = new Perro, 24` |
 | Excepciones | `try Lcatch` · `endtry` · `catch e` | ver sección 4 |
-| Salida | `print a` | `print t0` |
+| Strings | `t = concat a, b` · `t = streq a, b` · `t = strne a, b` | `t0 = concat s, "!"` |
+| Salida | `print a` (entero) · `prints a` (string) · `printb a` (booleano) | `prints t0` |
 
 Un operando es un **literal** (`5`, `"hola"`, `true`, `false`, `null`), una **variable** o un
 **temporal**.
@@ -32,7 +33,10 @@ Un operando es un **literal** (`5`, `"hola"`, `true`, `false`, `null`), una **va
 3. `N` (`frameSize`) = cabecera (24) + parámetros + locales + (máximo de temporales simultáneos × 4).
 4. Las variables usan el nombre del código fuente. Una variable del usuario cuyo nombre tenga forma de
    temporal (`t0`, `t12`) se emite con sufijo `_v` (`t0_v`) para no confundirse con un temporal.
-5. `+` entre `string` es concatenación y usa el mismo `+` en el TAC.
+5. **TAC tipado.** Donde el tipo cambia el código máquina, la instrucción lo dice: `+` entre `string`
+   es `concat`, `==`/`!=` entre `string` son `streq`/`strne` (comparan contenido, no direcciones) y
+   `print` es `prints` o `printb` según el tipo. El tipo sale del análisis semántico; si no se conoce
+   (por ejemplo, un parámetro sin anotación) se emite la instrucción entera de siempre.
 
 ## 3. Expresiones
 
@@ -121,7 +125,16 @@ fuera de rango es un error de ejecución, no de compilación.
 
 ### `print`
 
-`print(e)` evalúa `e` y emite `print x`.
+`print(e)` evalúa `e` y emite `print x` si es entero, `prints x` si es `string` y `printb x` si es
+`boolean`. Un arreglo u objeto se imprime con `print`, es decir, como su dirección.
+
+```
+let s: string = "hola";          s = "hola"
+print(s + "!");                  t0 = concat s, "!"
+                                 prints t0
+print(s == "hola");              t0 = streq s, "hola"
+                                 printb t0
+```
 
 ## 4. Flujo de control, funciones y excepciones
 

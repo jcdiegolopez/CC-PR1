@@ -15,7 +15,7 @@ t0 = a % b
 t1 = a / b
 t0 = t0 + t1
 m = t0
-t0 = "hola" + " mundo"
+t0 = concat "hola", " mundo"
 s = t0
 print r
 endfunc

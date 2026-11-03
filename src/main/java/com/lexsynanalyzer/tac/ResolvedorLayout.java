@@ -1,6 +1,8 @@
 package com.lexsynanalyzer.tac;
 
 import com.lexsynanalyzer.semantic.Layout;
+import com.lexsynanalyzer.semantic.TipoDato;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.Optional;
@@ -36,5 +38,10 @@ public final class ResolvedorLayout implements ResolvedorMemoria {
     @Override
     public Optional<String> etiquetaFuncion(TerminalNode identificador) {
         return layout.etiquetaFuncion(identificador.getSymbol());
+    }
+
+    @Override
+    public Optional<TipoDato> tipo(ParseTree nodo) {
+        return layout.semantico() == null ? Optional.empty() : Optional.ofNullable(layout.semantico().tipo(nodo));
     }
 }
