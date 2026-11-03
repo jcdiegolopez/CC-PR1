@@ -12,6 +12,7 @@
 
 # Package files
 *.jar
+!tools/Mars4_5.jar
 *.war
 *.nar
 *.ear
