@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,7 +18,7 @@ class GeneradorMIPSTest {
 
     /** Toda variable vive en el mismo lugar: aquí solo importa el recorrido, no la memoria. */
     private static GeneradorMIPS generador() {
-        return new GeneradorMIPS(funcion -> nombre -> "0($fp)", RegistrosIngenuos::new);
+        return new GeneradorMIPS(funcion -> nombre -> "0($fp)", FabricaRegistros.INGENUO);
     }
 
     private static ProgramaTAC tac(Instruccion... instrucciones) {
@@ -37,14 +38,14 @@ class GeneradorMIPSTest {
     void mainTerminaConSyscallDeSalidaYLoNoTraducidoQuedaPendiente() {
         ProgramaMips mips = generador().generar(tac(
                 Instruccion.funcion("main", 24),
-                Instruccion.imprimir("5"),
+                Instruccion.param("5"),
                 Instruccion.finFuncion()));
 
         assertEquals("""
                 .text
                 .globl main
                 main:
-                    # PENDIENTE: print 5
+                    # PENDIENTE: param 5
                     # endfunc
                     li $v0, 10
                     syscall
@@ -94,7 +95,7 @@ class GeneradorMIPSTest {
         new GeneradorMIPS(funcion -> {
             pedidas.add(funcion);
             return nombre -> "0($fp)";
-        }, RegistrosIngenuos::new).generar(tac(
+        }, FabricaRegistros.INGENUO).generar(tac(
                 Instruccion.funcion("main", 24), Instruccion.finFuncion(),
                 Instruccion.funcion("fib", 36), Instruccion.finFuncion()));
 
@@ -129,7 +130,102 @@ class GeneradorMIPSTest {
         String asm = generador().generar(resultado.tac()).toString();
 
         assertTrue(asm.startsWith(".text\n.globl main\nmain:\n"), asm);
-        assertTrue(asm.contains("# PENDIENTE: t0 = 1 + 2"), asm);
-        assertTrue(asm.contains("# PENDIENTE: print t0"), asm);
+        assertTrue(asm.contains("# t0 = 1 + 2\n    li $t0, 1\n    li $t1, 2\n    addu $t2, $t0, $t1\n"), asm);
+        assertTrue(asm.contains("# print t0\n"), asm);
+        assertFalse(asm.contains("PENDIENTE"), asm);
+    }
+
+    @Test
+    void lasRutinasPedidasSeEmitenUnaVezAlFinalConSusDependencias() {
+        List<String> emitidas = new ArrayList<>();
+        GeneradorMIPS generador = generador()
+                .registrarRutina("__a", p -> {
+                    emitidas.add("__a");
+                    p.requerir("__b");
+                    p.emit(InstruccionMips.etiqueta("__a"));
+                })
+                .registrarRutina("__b", p -> {
+                    emitidas.add("__b");
+                    p.emit(InstruccionMips.etiqueta("__b"));
+                })
+                .registrar(Instruccion.OP_PARAM, (ins, ctx) -> ctx.programa().requerir("__a"));
+
+        String asm = generador.generar(tac(
+                Instruccion.funcion("main", 24), Instruccion.param("1"), Instruccion.param("2"),
+                Instruccion.finFuncion())).toString();
+
+        assertEquals(List.of("__a", "__b"), emitidas);
+        assertTrue(asm.endsWith("syscall\n__a:\n__b:\n"), asm);
+    }
+
+    @Test
+    void rutinaSinImplementarEsUnError() {
+        GeneradorMIPS generador = generador()
+                .registrar(Instruccion.OP_PARAM, (ins, ctx) -> ctx.programa().requerir("__no_existe"));
+
+        assertThrows(IllegalStateException.class, () -> generador.generar(tac(
+                Instruccion.funcion("main", 24), Instruccion.param("1"), Instruccion.finFuncion())));
+    }
+
+    @Test
+    void elAsignadorRecibeElCuerpoDeSuFuncionYElIndiceDeCadaInstruccion() {
+        List<String> vistos = new ArrayList<>();
+        FabricaRegistros fabrica = (programa, ubicaciones, cuerpo) -> {
+            vistos.add("cuerpo " + cuerpo.size());
+            return new ConIndice(new RegistrosIngenuos(programa, ubicaciones), vistos);
+        };
+        new GeneradorMIPS(f -> n -> "0($fp)", fabrica).generar(tac(
+                Instruccion.funcion("main", 24), Instruccion.finFuncion(),
+                Instruccion.funcion("f", 24), Instruccion.etiqueta("L0"), Instruccion.finFuncion()));
+
+        assertEquals(List.of("cuerpo 2", "0", "1", "cuerpo 3", "0", "1", "2"), vistos);
+    }
+
+    /** Anota cada índice que recibe y delega todo lo demás. */
+    private record ConIndice(AsignadorRegistros base, List<String> vistos) implements AsignadorRegistros {
+        @Override
+        public void antesDeInstruccion(int indice) {
+            vistos.add(String.valueOf(indice));
+        }
+
+        @Override
+        public String leer(String operando) {
+            return base.leer(operando);
+        }
+
+        @Override
+        public String paraResultado(String destino) {
+            return base.paraResultado(destino);
+        }
+
+        @Override
+        public void definido(String destino, String registro) {
+            base.definido(destino, registro);
+        }
+
+        @Override
+        public void copia(String destino, String origen) {
+            base.copia(destino, origen);
+        }
+
+        @Override
+        public void siguienteInstruccion() {
+            base.siguienteInstruccion();
+        }
+
+        @Override
+        public void finDeBloque() {
+            base.finDeBloque();
+        }
+
+        @Override
+        public void antesDeLlamada() {
+            base.antesDeLlamada();
+        }
+
+        @Override
+        public void antesDePosibleExcepcion() {
+            base.antesDePosibleExcepcion();
+        }
     }
 }

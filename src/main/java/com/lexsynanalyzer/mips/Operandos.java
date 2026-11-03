@@ -1,5 +1,6 @@
 package com.lexsynanalyzer.mips;
 
+import java.math.BigInteger;
 import java.util.regex.Pattern;
 
 /**
@@ -33,7 +34,11 @@ public final class Operandos {
                 || operando.equals("true") || operando.equals("false") || operando.equals("null");
     }
 
-    /** Valor numérico de un inmediato, como texto para {@code li}. */
+    /**
+     * Valor numérico de un inmediato, como texto para {@code li}. Los enteros de Compiscript son de
+     * 32 bits con desborde (como {@code addu}/{@code mul}), así que un literal que no cabe se reduce a
+     * 32 bits: {@code 2147483648} es {@code -2147483648}, y {@code -2147483648} sale bien.
+     */
     public static String valorInmediato(String operando) {
         return switch (operando) {
             case "true" -> "1";
@@ -42,7 +47,7 @@ public final class Operandos {
                 if (!ENTERO.matcher(operando).matches()) {
                     throw new IllegalArgumentException("No es un inmediato: " + operando);
                 }
-                yield operando;
+                yield String.valueOf(new BigInteger(operando).intValue());
             }
         };
     }

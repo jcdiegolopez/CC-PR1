@@ -3,9 +3,11 @@ package com.lexsynanalyzer.mips;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Programa MIPS listo para MARS: sección {@code .data} y sección {@code .text}.
@@ -19,6 +21,7 @@ public final class ProgramaMips {
     private final Map<String, String> cadenas = new LinkedHashMap<>();
     private final Map<String, String> datos = new LinkedHashMap<>();
     private final List<InstruccionMips> texto = new ArrayList<>();
+    private final Set<String> rutinas = new LinkedHashSet<>();
 
     public static ProgramaMips vacio() {
         return new ProgramaMips();
@@ -46,6 +49,19 @@ public final class ProgramaMips {
         if (anterior != null && !anterior.equals(directiva)) {
             throw new IllegalArgumentException("La etiqueta de datos " + etiqueta + " ya existe con otra directiva");
         }
+    }
+
+    /**
+     * Pide que la rutina del runtime {@code nombre} (por ejemplo {@code __concat}) se incluya en el
+     * programa. {@link GeneradorMIPS} la emite una sola vez, al final de {@code .text}.
+     */
+    public void requerir(String rutina) {
+        rutinas.add(Objects.requireNonNull(rutina));
+    }
+
+    /** Rutinas pedidas con {@link #requerir}, en el orden en que se pidieron. */
+    public Set<String> rutinasRequeridas() {
+        return Collections.unmodifiableSet(rutinas);
     }
 
     public List<InstruccionMips> texto() {
