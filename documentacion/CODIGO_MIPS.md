@@ -173,10 +173,10 @@ misma salida (`EjecucionMipsTest`). Si `GetReg` tuviera un error, la salida ser�
 
 Cada rutina se emite **una vez** y solo si el programa la usa (`ProgramaMips.requerir`).
 
-`__lanzar` y el marco de activación (`function`/`endfunc`) que trae `GeneradorMIPS` son **provisionales**:
-`__lanzar` imprime `Error en tiempo de ejecución: <mensaje>` y termina con código 1 (syscall 17). La
-versión con pila de manejadores de `catch` y el prólogo/epílogo reales los registra la persona B con
-`registrarRutina` y `registrar`.
+`__lanzar` y el marco de activación (`function`/`endfunc`) están integrados en `GeneradorMIPS`. El runtime
+mantiene hasta 16 manejadores `try/catch`, restaura el frame al lanzar y entrega el mensaje al `catch` como
+string. Sin manejador, imprime `Error en tiempo de ejecución: <mensaje>` y termina con código 1 (syscall 17).
+Los prólogos/epílogos, `param`/`call`/`return` y el trazado opcional de funciones también están integrados.
 
 ## 6. Pruebas
 
@@ -208,10 +208,10 @@ java -Dfile.encoding=UTF-8 -jar tools/Mars4_5.jar nc sm 1000000 target/asm/contr
 
 Con `-Dfile.encoding=UTF-8` las tildes salen bien. MARS agrega una línea en blanco al final de la salida.
 
-`MipsDePrueba` (también en `src/test`) pone las direcciones (globales `g_x`, frame `offset($fp)`,
-temporal `tk` en `tamanoBase + 4k($fp)`), el prólogo y el epílogo, y una versión de `param`/`call`/`return`
-que sigue el contrato §3.3, mientras no existan `Ubicaciones`, `MarcoActivacion` y `TraductorLlamadas`.
-No tiene enlace de acceso: una función anidada no puede leer las locales de la que la contiene.
+`Ubicaciones`, `MarcoActivacion` y `TraductorLlamadas` implementan las direcciones (globales `g_x`, frame
+`offset($fp)`, temporal `tk` en `tamanoBase + 4k($fp)`), el prólogo/epílogo y `param`/`call`/`return`.
+`MipsDePrueba` delega ahora al generador de producción. Las funciones anidadas tienen etiquetas y frames
+independientes, pero no cierres ni acceso a locales de la función contenedora.
 
 `bash tools/probar_mars.sh` corre en MARS todos los `.asm` de `target/asm/` (después de `mvn test`).
 Cómo conectan B y C sus traductores: `INTEGRACION_MIPS.md`.
@@ -221,7 +221,7 @@ Cómo conectan B y C sus traductores: `INTEGRACION_MIPS.md`.
 - Un entero literal que no cabe en 32 bits se reduce a 32 bits (`2147483648` es `-2147483648`), igual que
   el desborde de `addu` y `mul`.
 - `print` de un arreglo u objeto imprime su dirección.
-- Un parámetro sin tipo anotado, o la variable de un `catch` (el semántico le da tipo desconocido), se trata
-  como entero: `print(err)` imprime la dirección del mensaje y `+`/`==` no usan el runtime de strings.
-- `switch` sobre strings compara direcciones: `ControlTAC` emite `==` sin tipo.
+- Un parámetro sin tipo anotado se trata como entero; los parámetros string requieren anotación explícita.
+- `charat` no valida el índice. La comprobación y el lanzamiento de excepciones por índices de arreglos
+  pertenecen a la persona C.
 - Los caracteres no ASCII (`ó`, `í`) dependen de que MARS lea el `.asm` como UTF-8.

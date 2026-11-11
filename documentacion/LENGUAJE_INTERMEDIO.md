@@ -216,10 +216,10 @@ L2:
 
 ### `foreach`
 
-Se recorre con un índice, la longitud (`len`) y una lectura `a[i]`. El arreglo se copia primero a un
-temporal, así que si el cuerpo reasigna la variable el ciclo no cambia de arreglo. El arreglo, la
-longitud y el índice **no se liberan** hasta salir del ciclo. Sobre un `string` es igual y cada
-elemento es un `string` de un carácter.
+Se recorre con un índice, la longitud y una lectura del elemento. El arreglo o string se copia primero a un
+temporal, así que si el cuerpo reasigna la variable el ciclo no cambia de origen. El origen, la longitud y
+el índice **no se liberan** hasta salir del ciclo. Para arreglos se usan `len` y `a[i]`; para strings se usan
+las operaciones tipadas `strlen` y `charat`, y cada elemento es un string de un carácter.
 
 ```
 foreach (x in nums) { print(x); }
@@ -244,9 +244,9 @@ L2:
 ### `switch` con fall-through
 
 El selector se evalúa **una vez** y su temporal no se libera hasta el final. Primero va la cadena de
-comparaciones, después los cuerpos en orden. Un caso sin `break` **continúa** con el siguiente
-(fall-through); `break` salta al fin. Si ningún caso coincide se salta al `default` o, si no hay, al
-fin.
+comparaciones, después los cuerpos en orden. Para selectores string, cada caso se compara por contenido
+con `streq`; para otros tipos se usa `==`. Un caso sin `break` **continúa** con el siguiente (fall-through);
+`break` salta al fin. Si ningún caso coincide se salta al `default` o, si no hay, al fin.
 
 ```
 switch (op) {                       t0 = op == 1

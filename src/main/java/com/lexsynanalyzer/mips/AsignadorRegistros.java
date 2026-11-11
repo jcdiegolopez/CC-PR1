@@ -72,4 +72,12 @@ public interface AsignadorRegistros {
      * un registro se guardan, porque el {@code catch} las lee de memoria. Los registros siguen valiendo.
      */
     void antesDePosibleExcepcion();
+
+    /**
+     * Descarta los descriptores al entrar en un {@code catch}. El salto de excepción puede haber
+     * omitido escrituras y resultados que el camino normal sí habría producido.
+     */
+    default void descartarEnCaptura() {
+        finDeBloque();
+    }
 }

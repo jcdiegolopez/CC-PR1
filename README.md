@@ -6,7 +6,7 @@
 **Curso:** Construcción de Compiladores  
 **Proyecto:** Laboratorio 01 & 02 — Analizador Léxico, Sintáctico y Semántico con ANTLR4  
 **Lenguaje Objetivo:** Compiscript (`.cps`)  
-**Plataforma:** Java 21 / Swing GUI / Maven  
+**Plataforma:** Java 25 / Swing GUI / Maven
 
 ---
 
@@ -50,7 +50,7 @@ Para información detallada del diseño y funcionamiento del sistema:
 
 ## 🚀 Requisitos del Sistema
 
-- **Java JDK 21** o superior.
+- **Java JDK 25** o superior.
 - **Apache Maven 3.8+**.
 
 ---
@@ -78,7 +78,7 @@ mvn exec:java
 
 ```
 CC-LAB01/
-├── pom.xml                                           # Configuración Maven (ANTLR4 plugin, compiler release 21)
+├── pom.xml                                           # Configuración Maven (ANTLR4 plugin, compiler release 25)
 ├── README.md                                         # Documentación general
 ├── docs/
 │   ├── ARQUITECTURA.md                               # Documento de arquitectura y módulos

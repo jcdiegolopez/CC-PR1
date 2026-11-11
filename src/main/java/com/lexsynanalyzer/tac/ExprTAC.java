@@ -2,6 +2,7 @@ package com.lexsynanalyzer.tac;
 
 import com.lexsynanalyzer.parser.LexSynAnalyzerBaseVisitor;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.*;
+import com.lexsynanalyzer.semantic.Layout;
 import com.lexsynanalyzer.semantic.TipoDato;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -70,7 +71,8 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
         } else {
             String objeto = visit(ctx.expression(0));
             valor = visit(ctx.expression(1));
-            programa.emit(Instruccion.escribirCampo(objeto, ctx.Identifier().getText(), valor));
+            String campo = campoConOffset(ctx.expression(0), ctx.Identifier().getText());
+            programa.emit(Instruccion.escribirCampo(objeto, campo, valor));
             temps.liberar(objeto);
         }
         temps.liberar(valor);
@@ -81,6 +83,30 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
     public String visitExpressionStatement(ExpressionStatementContext ctx) {
         temps.liberar(visit(ctx.expression()));
         return null;
+    }
+
+    private String campoConOffset(ParseTree receptor, String campo) {
+        if (!(memoria instanceof ResolvedorLayout)) {
+            return campo;
+        }
+        Layout layout = ((ResolvedorLayout) memoria).layout();
+        if (layout == null || layout.semantico() == null) {
+            return campo;
+        }
+        TipoDato tipo = layout.semantico().tipoReceptor(receptor);
+        if (tipo == null) {
+            tipo = layout.semantico().tipo(receptor);
+        }
+        if (tipo == null || tipo.clase() != TipoDato.Clase.CLASE) {
+            return campo;
+        }
+        return layout.clase(tipo.nombreClase())
+                .map(clase -> clase.campos().stream()
+                        .filter(variable -> variable.nombre().equals(campo))
+                        .findFirst()
+                        .map(variable -> campo + " @" + variable.direccion().offset())
+                        .orElse(campo))
+                .orElse(campo);
     }
 
     @Override
@@ -150,7 +176,8 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
     public String visitPropertyAssignExpr(PropertyAssignExprContext ctx) {
         String objeto = visit(ctx.lhs);
         String valor = visit(ctx.assignmentExpr());
-        programa.emit(Instruccion.escribirCampo(objeto, ctx.Identifier().getText(), valor));
+        String campo = campoConOffset(ctx.lhs, ctx.Identifier().getText());
+        programa.emit(Instruccion.escribirCampo(objeto, campo, valor));
         temps.liberar(objeto);
         return valor;
     }
@@ -372,7 +399,8 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
                 } else {
                     temps.liberar(actual);
                     String resultado = temps.nuevo();
-                    programa.emit(Instruccion.leerCampo(resultado, actual, nombre));
+                    String campo = campoConOffset(propiedad, nombre);
+                    programa.emit(Instruccion.leerCampo(resultado, actual, campo));
                     actual = resultado;
                 }
             } else {

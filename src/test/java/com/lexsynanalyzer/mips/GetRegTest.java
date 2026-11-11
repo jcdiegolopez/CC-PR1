@@ -26,7 +26,21 @@ class GetRegTest {
         instrucciones.forEach(tac::emit);
         ProgramaMips programa = new GeneradorMIPS(f -> nombre -> nombre + "($fp)", FabricaRegistros.GETREG).generar(tac);
         return programa.texto().stream().filter(InstruccionMips::esInstruccion)
+                .filter(instruccion -> !esInstruccionDeMarco(instruccion))
                 .map(InstruccionMips::toString).map(String::strip).collect(Collectors.joining("\n"));
+    }
+
+    private static boolean esInstruccionDeMarco(InstruccionMips instruccion) {
+        return switch (instruccion.op()) {
+            case "addiu" -> instruccion.operandos().equals(List.of("$sp", "$sp", "-64"));
+            case "move" -> instruccion.operandos().equals(List.of("$fp", "$sp"));
+            case "li" -> instruccion.operandos().equals(List.of("$v0", "10"));
+            case "sw" -> instruccion.operandos().equals(List.of("$ra", "0($sp)"))
+                    || instruccion.operandos().equals(List.of("$fp", "8($sp)"))
+                    || instruccion.operandos().equals(List.of("$zero", "16($sp)"));
+            case "syscall" -> true;
+            default -> false;
+        };
     }
 
     @Test
@@ -41,9 +55,7 @@ class GetRegTest {
                 lw $t1, b($fp)
                 addu $t2, $t0, $t1
                 mul $t2, $t2, $t0
-                sw $t2, x($fp)
-                li $v0, 10
-                syscall""", asm);
+                sw $t2, x($fp)""", asm);
     }
 
     @Test
@@ -58,9 +70,7 @@ class GetRegTest {
                 li $t1, 1
                 subu $t1, $t0, $t1
                 sw $t1, y($fp)
-                sw $t1, z($fp)
-                li $v0, 10
-                syscall""", asm, "ni move ni sw de t0: solo se guardan y y z al final del bloque");
+                sw $t1, z($fp)""", asm, "ni move ni sw de t0: solo se guardan y y z al final del bloque");
     }
 
     @Test

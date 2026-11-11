@@ -6,7 +6,7 @@ Esta guía proporciona los pasos necesarios para compilar el proyecto, ejecutar 
 
 ## 1. Requisitos Previos
 
-- **Java Development Kit (JDK):** Versión 21 o superior.
+- **Java Development Kit (JDK):** Versión 25 o superior.
 - **Apache Maven:** Versión 3.8+ instalada y configurada en el `PATH`.
 
 Para comprobar las versiones instaladas:

@@ -37,6 +37,8 @@ public record Instruccion(String op, String a1, String a2, String res) {
     public static final String OP_LEER_INDICE = "aload";
     public static final String OP_ESCRIBIR_INDICE = "astore";
     public static final String OP_LONGITUD = "len";
+    public static final String OP_LONGITUD_CADENA = "strlen";
+    public static final String OP_CARACTER_EN = "charat";
     public static final String OP_NUEVO_OBJETO = "new";
     public static final String OP_LEER_CAMPO = "fload";
     public static final String OP_ESCRIBIR_CAMPO = "fstore";
@@ -144,6 +146,14 @@ public record Instruccion(String op, String a1, String a2, String res) {
         return new Instruccion(OP_LONGITUD, arreglo, null, destino);
     }
 
+    public static Instruccion longitudString(String destino, String cadena) {
+        return new Instruccion(OP_LONGITUD_CADENA, cadena, null, destino);
+    }
+
+    public static Instruccion caracterEn(String destino, String cadena, String indice) {
+        return new Instruccion(OP_CARACTER_EN, cadena, indice, destino);
+    }
+
     public static Instruccion nuevoObjeto(String destino, String clase, int tamano) {
         return new Instruccion(OP_NUEVO_OBJETO, clase, String.valueOf(tamano), destino);
     }
@@ -152,8 +162,16 @@ public record Instruccion(String op, String a1, String a2, String res) {
         return new Instruccion(OP_LEER_CAMPO, objeto, campo, destino);
     }
 
+    public static Instruccion leerCampo(String destino, String objeto, String campo, int offset) {
+        return new Instruccion(OP_LEER_CAMPO, objeto, campo + " @" + offset, destino);
+    }
+
     public static Instruccion escribirCampo(String objeto, String campo, String valor) {
         return new Instruccion(OP_ESCRIBIR_CAMPO, objeto, campo, valor);
+    }
+
+    public static Instruccion escribirCampo(String objeto, String campo, String valor, int offset) {
+        return new Instruccion(OP_ESCRIBIR_CAMPO, objeto, campo + " @" + offset, valor);
     }
 
     public static Instruccion intentar(String etiquetaCatch) {
@@ -218,6 +236,8 @@ public record Instruccion(String op, String a1, String a2, String res) {
             case OP_LEER_INDICE -> res + " = " + a1 + "[" + a2 + "]";
             case OP_ESCRIBIR_INDICE -> a1 + "[" + a2 + "] = " + res;
             case OP_LONGITUD -> res + " = len " + a1;
+            case OP_LONGITUD_CADENA -> res + " = strlen " + a1;
+            case OP_CARACTER_EN -> res + " = charat " + a1 + ", " + a2;
             case OP_NUEVO_OBJETO -> res + " = new " + a1 + ", " + a2;
             case OP_LEER_CAMPO -> res + " = " + a1 + "." + a2;
             case OP_ESCRIBIR_CAMPO -> a1 + "." + a2 + " = " + res;

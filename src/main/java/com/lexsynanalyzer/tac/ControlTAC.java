@@ -2,6 +2,7 @@ package com.lexsynanalyzer.tac;
 
 import com.lexsynanalyzer.parser.LexSynAnalyzerBaseVisitor;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser.*;
+import com.lexsynanalyzer.semantic.TipoDato;
 import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.ArrayDeque;
@@ -224,10 +225,15 @@ public final class ControlTAC extends LexSynAnalyzerBaseVisitor<Void> {
             arreglo = copia;
         }
         String variable = memoria.nombreTac(ctx.Identifier());
+        boolean esCadena = memoria.tipo(ctx.expression())
+                .map(tipo -> tipo.clase() == TipoDato.Clase.STRING)
+                .orElse(false);
 
         String longitud = temps.nuevo();
         String indice = temps.nuevo();
-        programa.emit(Instruccion.longitud(longitud, arreglo));
+        programa.emit(esCadena
+                ? Instruccion.longitudString(longitud, arreglo)
+                : Instruccion.longitud(longitud, arreglo));
         programa.emit(Instruccion.asignar(indice, "0"));
 
         String inicio = etiquetas.nueva();
@@ -242,7 +248,9 @@ public final class ControlTAC extends LexSynAnalyzerBaseVisitor<Void> {
 
         // variable = arreglo[indice]
         String elemento = temps.nuevo();
-        programa.emit(Instruccion.leerIndice(elemento, arreglo, indice));
+        programa.emit(esCadena
+                ? Instruccion.caracterEn(elemento, arreglo, indice)
+                : Instruccion.leerIndice(elemento, arreglo, indice));
         programa.emit(Instruccion.asignar(variable, elemento));
         temps.liberar(elemento);
 
@@ -271,6 +279,9 @@ public final class ControlTAC extends LexSynAnalyzerBaseVisitor<Void> {
     @Override
     public Void visitSwitchStatement(SwitchStatementContext ctx) {
         String selector = expr.visit(ctx.expression());
+        boolean selectorEsCadena = memoria.tipo(ctx.expression())
+                .map(tipo -> tipo.clase() == TipoDato.Clase.STRING)
+                .orElse(false);
         String fin = etiquetas.nueva();
 
         List<SwitchCaseContext> casos = ctx.switchCase();
@@ -286,7 +297,9 @@ public final class ControlTAC extends LexSynAnalyzerBaseVisitor<Void> {
         for (int i = 0; i < casos.size(); i++) {
             String valorCaso = expr.visit(casos.get(i).expression());
             String comparacion = temps.nuevo();
-            programa.emit(Instruccion.binaria(comparacion, selector, "==", valorCaso));
+            programa.emit(selectorEsCadena
+                    ? Instruccion.streq(comparacion, selector, valorCaso)
+                    : Instruccion.binaria(comparacion, selector, "==", valorCaso));
             programa.emit(Instruccion.saltoSi(comparacion, etiquetasCasos[i]));
             temps.liberar(valorCaso);
             temps.liberar(comparacion);

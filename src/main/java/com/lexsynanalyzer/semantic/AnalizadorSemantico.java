@@ -724,7 +724,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
 
         entrarBloque("catch");
         resultado.registrarEntorno(ctx, tabla.actual());
-        declararVariable(ctx.Identifier().getSymbol(), TipoDato.DESCONOCIDO, false, true);
+        declararVariable(ctx.Identifier().getSymbol(), TipoDato.STRING, false, true);
         visit(ctx.block(1));
         tabla.salirEntorno();
         return TipoDato.VOID;

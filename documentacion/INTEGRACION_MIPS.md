@@ -1,24 +1,27 @@
-# Cómo conectar B y C al backend MIPS
+# Integración del backend MIPS
 
-Lo que ya está hecho por la persona A, y lo que B y C necesitan para enchufar lo suyo sin romper `getReg`.
-La teoría (registros, `getReg`, tabla TAC → MIPS) está en `CODIGO_MIPS.md`. El contrato completo es
-`docs/proyecto3/guia.md` §3.
+La persona B ya está integrada en el generador de producción. Esta guía resume su contrato y deja las tareas
+de memoria de la persona C como referencia. La teoría (registros, `getReg`, tabla TAC → MIPS) está en
+`CODIGO_MIPS.md`; el contrato original está en `docs/proyecto3/guia.md` §3.
 
-## 1. Qué ya funciona (rama `proyecto3`)
+## 1. Backend integrado
 
 - TAC tipado de A: `concat`, `streq`, `strne`, `prints`, `printb`.
-- `GeneradorMIPS`, `GetReg` (con bloques básicos y variables vivas) y `RegistrosIngenuos`.
+- `GeneradorMIPS`, `GetReg` (con bloques básicos y variables vivas) y `RegistrosIngenuos`, en modo `INGENUO`
+  y `GETREG`.
 - Expresiones, control (`if`, ciclos, `switch`, `break`/`continue`), `print` en sus tres versiones y división
-  entre cero.
+  entre cero. Los `switch` de strings comparan contenido, no direcciones.
 - Runtime de strings: `__concat`, `__strlen`, `__streq`, `__charat`, `__print_bool`.
+- Frames, parámetros, llamadas, retornos y excepciones con pila de manejadores; traza opcional de entrada y
+  salida de funciones.
 - MARS 4.5.1 en `tools/Mars4_5.jar` (licencia MIT, incluida dentro del jar).
-- `bash tools/probar_mars.sh` corre en MARS cada `.asm` que dejan los tests. Hoy dan bien 325 de 325.
+- `bash tools/probar_mars.sh` corre en MARS los `.asm` que dejan los tests.
 
-Comprobarlo después de clonar o hacer pull:
+Validar el backend:
 
 ```
-mvn clean test                 # 598 tests, 0 fallos
-bash tools/probar_mars.sh      # MARS: 325 bien, 0 mal
+mvn clean test
+bash tools/probar_mars.sh
 ```
 
 Un `.asm` suelto se corre así:
@@ -31,19 +34,16 @@ Sin `-Dfile.encoding=UTF-8` las tildes salen mal. MARS agrega una línea en blan
 
 ## 2. Cómo se enchufa un traductor
 
-`GeneradorMIPS` no sabe nada de funciones, arreglos ni excepciones. Lo que hace es recorrer el TAC y llamar al
-`Traductor` registrado para cada `op`. Cada quien registra los suyos:
+`GeneradorMIPS` recorre el TAC y llama al `Traductor` registrado para cada `op`. Los traductores de funciones,
+llamadas y excepciones ya se registran en el constructor. Para generar con el `Layout` del análisis semántico:
 
 ```java
-// Ubicaciones, llamadas y RuntimeErrores son de B; los nombres son de ejemplo
-GeneradorMIPS generador = new GeneradorMIPS(funcion -> Ubicaciones.de(layout, funcion), FabricaRegistros.GETREG);
-generador.registrar(Instruccion.OP_LLAMAR, llamadas::llamar)        // (Instruccion, ContextoFuncion) -> void
-         .registrarRutina(GeneradorMIPS.LANZAR, RuntimeErrores::lanzar);
+GeneradorMIPS generador = new GeneradorMIPS(layout, FabricaRegistros.GETREG);
 ProgramaMips asm = generador.generar(tac);
 ```
 
-- `registrar(op, t)` reemplaza al traductor que ya hubiera. Así B sustituye los provisionales de
-  `function`/`endfunc`.
+- `registrar(op, t)` reemplaza al traductor que ya hubiera; el generador registra los marcos y el runtime de
+  errores de producción.
 - `ContextoFuncion` trae `programa()`, `registros()`, `funcion()`, `tamanoFrame()` y `esMain()`.
 - Una rutina del runtime se pide con `programa.requerir("__x")`. Se emite una sola vez al final y puede pedir
   otras. Si alguien pide una rutina que nadie registró, `generar` lanza `IllegalStateException`.
@@ -73,46 +73,20 @@ regs.definido(ins.res(), rd);
 **La regla de oro:** todo `.cps` nuevo se prueba con `INGENUO` y con `GETREG`. Si los dos modos dan salidas
 distintas, falta una de las llamadas de la tabla.
 
-## 3. Persona B
+## 3. Persona B: implementado
 
-Ya hay una versión que funciona y está probada en MARS: `src/test/java/com/lexsynanalyzer/mips/MipsDePrueba.java`.
-Sigue el §3.3 al pie de la letra (direcciones, prólogo, epílogo, `param`/`call`/`return`). Úsala de
-referencia. Cuando existan `Ubicaciones`, `MarcoActivacion` y `TraductorLlamadas`, A cambia los tests para
-usar tus clases y borra `MipsDePrueba`.
-
-1. **`Ubicaciones implements ResolvedorUbicaciones`**: `nombre → "offset($fp)"`, `"g_x"` o, para el temporal
-   `tk`, `tamanoBase + 4k($fp)`. Nunca recibe literales: esos los resuelve `Operandos` (`li`/`la`). Las
-   globales se declaran una vez con `programa.dato("g_x", ".word 0")`. `MipsDePrueba` lo hace en el prólogo
-   de `main`.
-2. **`MarcoActivacion`**: registrar `OP_FUNCION`, `OP_FIN_FUNCION` y `OP_RETORNO`.
-   - Etiquetas con `GeneradorMIPS.etiquetaFuncion(f)`, que antepone `f_` a todo menos a `main`.
-   - Epílogo: `finDeBloque()` **antes** de la etiqueta `f_<f>_fin`, para cubrir una función que termina sin
-     `return`.
-   - `return a`: `leer(a)` → `move $v0, r` → `finDeBloque()` → `j f_<f>_fin`.
-3. **`TraductorLlamadas`**: `param` solo acumula. En el `call`:
-   - `antesDeLlamada()`.
-   - Cada argumento: `lw`/`li`/`la` a `$t8` y `sw $t8, (offParam - N)($sp)`. Después de `antesDeLlamada`
-     todo está en memoria, así que se lee de ahí. `Vida` ya cuenta los argumentos como usados en el `call`.
-     Por eso los `param` tienen que seguir viniendo seguidos justo antes del `call`.
-   - `jal`, y si hay destino: `paraResultado(t)` → `move r, $v0` → `definido(t, r)`.
-4. **`RuntimeErrores`**: `registrarRutina(GeneradorMIPS.LANZAR, ...)` reemplaza al provisional. Recibe el
-   mensaje en `$a0`. `__error_div0` ya salta ahí, así que una división dentro de un `try` funciona en cuanto
-   tu `__lanzar` busque el manejador. Solo puede usar `$a*`, `$v*`, `$t8` y `$t9`.
-5. **try/catch.** El TAC actual es `try L0` … `endtry` · `goto L1` · `L0:` · `catch err` · … · `L1:`.
-   - `L0:` ya hace `finDeBloque()` por el traductor de `label`.
-   - `catch e`: `paraResultado(e)` → `move r, $v1` → `definido(e, r)`.
-   - La división ya llama a `antesDePosibleExcepcion()`, y un `call` dentro del `try` ya guarda todo con
-     `antesDeLlamada()`.
-   - Restricción: `Vida` no conoce el salto implícito del error al `catch`. Las variables del programa sí se
-     guardan, pero un **temporal** definido antes del `try` no puede leerse dentro del `catch`. El TAC
-     del P2 cumple esto hoy; no lo cambies.
-6. **TAC tipado pendiente (`ControlTAC`)**: `strlen` y `charat` en el `foreach` sobre strings (§3.1). El MIPS
-   de esos dos `op` lo traduce C, con las rutinas `RuntimeCadenas.STRLEN` y `CHARAT`, que ya existen.
-7. **Dos bugs que se arreglan en tu `ControlTAC`:**
-   - `switch` sobre strings compara direcciones porque emite `==`. Si la expresión es string, usa
-     `Instruccion.streq(...)`, que ya existe.
-   - La variable del `catch` llega con tipo desconocido, así que `print(err)` imprime una dirección. Si el
-     semántico le da tipo `string`, `ExprTAC` ya emite `prints` solo.
+- `Ubicaciones` resuelve variables globales, parámetros, locales y temporales del frame a partir de `Layout`.
+- `MarcoActivacion` emite prólogos, epílogos y retornos; `TraductorLlamadas` mueve argumentos al frame futuro
+  y preserva el valor de retorno en `$v0`.
+- `RuntimeErrores` y `TraductorExcepciones` mantienen hasta 16 manejadores activos. Al lanzar, se restaura
+  `$sp` y `$fp` del manejador más cercano; el mensaje llega al `catch` como string. Superar el límite o lanzar
+  sin `catch` produce un error de ejecución.
+- `foreach` sobre strings usa operaciones TAC tipadas `strlen` y `charat`; `switch` sobre strings usa
+  `streq`; las variables `catch` tienen tipo `string`.
+- Para trazar llamadas, usa `new GeneradorMIPS(layout, FabricaRegistros.GETREG, true)`. La traza imprime
+  `→ función` al entrar y `← función` al salir, con indentación por profundidad.
+- Las funciones anidadas reciben etiquetas y frames independientes. No se implementan cierres ni acceso a
+  variables locales de una función contenedora.
 
 ## 4. Persona C
 
@@ -147,17 +121,14 @@ usar tus clases y borra `MipsDePrueba`.
    - El código de `syscall 17` es el código de salida del proceso. Comprobado: `division_cero` sale con 1 y
      un programa normal con 0.
 5. **`LexSynAnalyzer`**:
-   - Arma el `GeneradorMIPS` con `GETREG`, registra los traductores de B y C, llama a `generar(tac)` y aplica
-     la mirilla.
+   - Arma el `GeneradorMIPS` con `GETREG`, llama a `generar(tac)` y aplica la mirilla.
    - Con errores el TAC llega vacío y `generar` devuelve un programa vacío.
-   - Mientras `Ubicaciones` no exista, sirve el `ubicaciones(layout, funcion)` de `MipsDePrueba`.
 
 ## 5. Tests nuevos
 
-- Cada caso va como `src/test/resources/mips/<caso>.cps` + `<caso>.salida`, con una línea por `print`.
-- Para que corra en los dos modos, agrega el nombre a `PROGRAMAS` en `EjecucionMipsTest` (archivo de A: avisa
-  en el PR) o crea tu propia clase con `MipsDePrueba.compilar(fuente, modo)`.
+- `PersonaBTest` cubre frames, parámetros, recursión, funciones anidadas, excepciones locales y entre
+  funciones, el TAC tipado de `foreach` sobre strings, `switch` de strings y traza en ambos modos.
 - Los tests corren el `.asm` en `SimuladorMips` (en `src/test`), que solo soporta lo que se genera hoy.
   Con una instrucción nueva falla con `Instrucción no soportada: ...`. Agrégala ahí con la misma semántica
   que en MARS.
-- Antes del PR: `mvn test` y `bash tools/probar_mars.sh`, los dos en verde.
+- Antes del PR, ejecuta `mvn clean test` y `bash tools/probar_mars.sh`.

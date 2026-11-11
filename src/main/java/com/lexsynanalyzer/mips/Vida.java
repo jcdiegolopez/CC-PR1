@@ -114,8 +114,13 @@ public final class Vida {
             case Instruccion.OP_SI, Instruccion.OP_SI_NO, Instruccion.OP_ASIGNAR, Instruccion.OP_NEGAR,
                  Instruccion.OP_NO, Instruccion.OP_PRINT, Instruccion.OP_PRINT_CADENA,
                  Instruccion.OP_PRINT_BOOLEANO, Instruccion.OP_PARAM, Instruccion.OP_RETORNO,
-                 Instruccion.OP_NUEVO_ARREGLO, Instruccion.OP_LONGITUD, Instruccion.OP_LEER_CAMPO ->
+                 Instruccion.OP_NUEVO_ARREGLO, Instruccion.OP_LONGITUD, Instruccion.OP_LONGITUD_CADENA,
+                 Instruccion.OP_LEER_CAMPO ->
                     agregarNombre(usos, ins.a1());
+            case Instruccion.OP_CARACTER_EN -> {
+                agregarNombre(usos, ins.a1());
+                agregarNombre(usos, ins.a2());
+            }
             case Instruccion.OP_ESCRIBIR_CAMPO -> {
                 agregarNombre(usos, ins.a1());
                 agregarNombre(usos, ins.res());
@@ -149,6 +154,7 @@ public final class Vida {
         return ins.res() != null && switch (ins.op()) {
             case Instruccion.OP_ASIGNAR, Instruccion.OP_NEGAR, Instruccion.OP_NO, Instruccion.OP_LLAMAR,
                  Instruccion.OP_NUEVO_ARREGLO, Instruccion.OP_LEER_INDICE, Instruccion.OP_LONGITUD,
+                 Instruccion.OP_LONGITUD_CADENA, Instruccion.OP_CARACTER_EN,
                  Instruccion.OP_NUEVO_OBJETO, Instruccion.OP_LEER_CAMPO, Instruccion.OP_CONCAT,
                  Instruccion.OP_STREQ, Instruccion.OP_STRNE -> true;
             default -> Instruccion.OPERADORES_BINARIOS.contains(ins.op());

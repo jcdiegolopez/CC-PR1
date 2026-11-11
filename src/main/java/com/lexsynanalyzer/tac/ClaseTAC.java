@@ -110,18 +110,34 @@ public final class ClaseTAC extends LexSynAnalyzerBaseVisitor<Void> implements E
         for (ClassMemberContext miembro : declaracion.classMember()) {
             if (miembro.variableDeclaration() != null && miembro.variableDeclaration().initializer() != null) {
                 VariableDeclarationContext campo = miembro.variableDeclaration();
-                asignarCampo(objeto, campo.Identifier().getText(), campo.initializer().expression());
+                asignarCampo(objeto, declaracion.Identifier(0).getText(), campo.Identifier().getText(),
+                        campo.initializer().expression());
             } else if (miembro.constantDeclaration() != null) {
                 ConstantDeclarationContext campo = miembro.constantDeclaration();
-                asignarCampo(objeto, campo.Identifier().getText(), campo.expression());
+                asignarCampo(objeto, declaracion.Identifier(0).getText(), campo.Identifier().getText(),
+                        campo.expression());
             }
         }
     }
 
-    private void asignarCampo(String objeto, String campo, ExpressionContext valor) {
+    private void asignarCampo(String objeto, String clase, String campo, ExpressionContext valor) {
         String v = expr.visit(valor);
-        programa.emit(Instruccion.escribirCampo(objeto, campo, v));
+        String campoConOffset = nombreCampoConOffset(clase, campo);
+        programa.emit(Instruccion.escribirCampo(objeto, campoConOffset, v));
         temps.liberar(v);
+    }
+
+    private String nombreCampoConOffset(String clase, String campo) {
+        if (layout == null) {
+            return campo;
+        }
+        return layout.clase(clase)
+                .map(estructura -> estructura.campos().stream()
+                        .filter(variable -> variable.nombre().equals(campo))
+                        .findFirst()
+                        .map(variable -> campo + " @" + variable.direccion().offset())
+                        .orElse(campo))
+                .orElse(campo);
     }
 
     // ------------------------------------------------------------------

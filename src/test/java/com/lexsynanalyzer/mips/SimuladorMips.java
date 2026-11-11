@@ -170,7 +170,7 @@ final class SimuladorMips {
             int siguiente = pc + 1;
             switch (ins[0]) {
                 case "li" -> poner(ins[1], Integer.decode(ins[2]));
-                case "la" -> poner(ins[1], direccionDato(ins[2]));
+                case "la" -> poner(ins[1], direccionEtiqueta(ins[2]));
                 case "move" -> poner(ins[1], valor(ins[2]));
                 case "lw" -> poner(ins[1], leerPalabra(direccion(ins[2])));
                 case "sw" -> escribirPalabra(direccion(ins[2]), valor(ins[1]));
@@ -302,6 +302,18 @@ final class SimuladorMips {
             throw new IllegalStateException("Etiqueta de datos inexistente: " + etiqueta);
         }
         return direccion;
+    }
+
+    private int direccionEtiqueta(String etiqueta) {
+        Integer direccion = etiquetasDatos.get(etiqueta);
+        if (direccion != null) {
+            return direccion;
+        }
+        Integer instruccion = etiquetasTexto.get(etiqueta);
+        if (instruccion != null) {
+            return instruccion;
+        }
+        throw new IllegalStateException("Etiqueta inexistente: " + etiqueta);
     }
 
     /** {@code off($r)}, {@code ($r)} o una etiqueta de datos. */

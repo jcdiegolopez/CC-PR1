@@ -11,6 +11,6 @@ endtry
 goto L1
 L0:
 catch err
-print err
+prints err
 L1:
 endfunc

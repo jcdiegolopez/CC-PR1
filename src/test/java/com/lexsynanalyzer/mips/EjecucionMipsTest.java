@@ -79,7 +79,8 @@ class EjecucionMipsTest {
 
     /** {@code lw}/{@code sw} escritos en el código del programa (sin contar el runtime). */
     private static long accesosAMemoria(String asm) {
-        return asm.lines().takeWhile(linea -> !linea.startsWith("__"))
+        return asm.lines().dropWhile(linea -> !linea.equals(".text")).skip(2)
+                .takeWhile(linea -> !linea.startsWith("__"))
                 .map(String::strip).filter(l -> l.startsWith("lw ") || l.startsWith("sw ")).count();
     }
 

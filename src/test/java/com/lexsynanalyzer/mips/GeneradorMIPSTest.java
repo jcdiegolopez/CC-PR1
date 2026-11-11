@@ -35,21 +35,27 @@ class GeneradorMIPSTest {
     }
 
     @Test
-    void mainTerminaConSyscallDeSalidaYLoNoTraducidoQuedaPendiente() {
+    void generaPrólogoYEpílogoYAcumulaParametrosHastaLaLlamada() {
         ProgramaMips mips = generador().generar(tac(
                 Instruccion.funcion("main", 24),
                 Instruccion.param("5"),
                 Instruccion.finFuncion()));
 
-        assertEquals("""
-                .text
-                .globl main
+        String asm = mips.toString();
+        assertTrue(asm.contains("""
                 main:
-                    # PENDIENTE: param 5
+                    addiu $sp, $sp, -24
+                    sw $ra, 0($sp)
+                    sw $fp, 8($sp)
+                    sw $zero, 16($sp)
+                    move $fp, $sp
+                    # param 5
                     # endfunc
+                main_fin:
                     li $v0, 10
                     syscall
-                """, mips.toString());
+                """), asm);
+        assertFalse(asm.contains("PENDIENTE"), asm);
     }
 
     @Test
@@ -226,6 +232,11 @@ class GeneradorMIPSTest {
         @Override
         public void antesDePosibleExcepcion() {
             base.antesDePosibleExcepcion();
+        }
+
+        @Override
+        public void descartarEnCaptura() {
+            base.descartarEnCaptura();
         }
     }
 }

@@ -167,6 +167,12 @@ public final class GetReg implements AsignadorRegistros {
         guardarSucios(nombre -> !TempPool.esTemporal(nombre));
     }
 
+    @Override
+    public void descartarEnCaptura() {
+        olvidarTodo();
+        fijados.clear();
+    }
+
     // --- Elección de registro ---
 
     /** Un registro sin valores útiles, desalojando (y derramando si hace falta) el mejor candidato. */
