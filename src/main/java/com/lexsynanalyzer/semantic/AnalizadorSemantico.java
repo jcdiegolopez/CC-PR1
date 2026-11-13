@@ -541,9 +541,21 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
         Token identificador = identificadorSimple(ctx.lhs);
         if (identificador == null) {
             visit(ctx.lhs);
+            rechazarAsignacionACaracter(ctx.lhs);
             return valor;
         }
         return asignar(identificador, valor, ctx.assignmentExpr());
+    }
+
+    /** {@code s[i] = v} con {@code s} string: los strings son inmutables, solo se pueden leer por índice. */
+    private void rechazarAsignacionACaracter(LeftHandSideContext lhs) {
+        List<SuffixOpContext> sufijos = lhs.suffixOp();
+        if (!sufijos.isEmpty() && sufijos.get(sufijos.size() - 1) instanceof IndexExprContext indice) {
+            TipoDato receptor = resultado.tipoReceptor(indice);
+            if (receptor != null && receptor.clase() == TipoDato.Clase.STRING) {
+                reportar(indice.getStart(), "Los strings son inmutables: no se puede asignar a un carácter por índice.");
+            }
+        }
     }
 
     @Override
@@ -957,6 +969,7 @@ public class AnalizadorSemantico extends LexSynAnalyzerBaseVisitor<TipoDato> {
                     indiceSufijo += 1;
                 }
             } else if (sufijo instanceof IndexExprContext indice) {
+                resultado.registrarReceptor(indice, tipo);
                 tipo = tipoDeIndexacion(tipo, indice);
                 indiceSufijo += 1;
             } else if (sufijo instanceof CallExprContext llamada) {

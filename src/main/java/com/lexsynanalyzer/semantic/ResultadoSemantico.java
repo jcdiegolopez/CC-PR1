@@ -36,7 +36,10 @@ public final class ResultadoSemantico {
         return entornos.get(nodo);
     }
 
-    /** Tipo estático del objeto sobre el que se accede a {@code .miembro} (nodo {@code PropertyAccessExpr}). */
+    /**
+     * Tipo estático de lo que está a la izquierda de un sufijo: el objeto de {@code .miembro}
+     * ({@code PropertyAccessExpr}) o lo indexado en {@code [i]} ({@code IndexExpr}, arreglo o string).
+     */
     public TipoDato tipoReceptor(ParseTree accesoPropiedad) {
         return receptores.get(accesoPropiedad);
     }

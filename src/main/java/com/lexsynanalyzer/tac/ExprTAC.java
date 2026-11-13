@@ -85,6 +85,19 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
         return null;
     }
 
+    /** {@code s[i]} sobre un string es {@code charat}: un string no tiene la cabecera de longitud de un arreglo. */
+    private boolean esIndiceDeCadena(IndexExprContext indice) {
+        if (!(memoria instanceof ResolvedorLayout resolvedor)) {
+            return false;
+        }
+        Layout layout = resolvedor.layout();
+        if (layout == null || layout.semantico() == null) {
+            return false;
+        }
+        TipoDato tipo = layout.semantico().tipoReceptor(indice);
+        return tipo != null && tipo.clase() == TipoDato.Clase.STRING;
+    }
+
     private String campoConOffset(ParseTree receptor, String campo) {
         if (!(memoria instanceof ResolvedorLayout)) {
             return campo;
@@ -389,7 +402,9 @@ public final class ExprTAC extends LexSynAnalyzerBaseVisitor<String> {
                 temps.liberar(actual);
                 temps.liberar(indice);
                 String resultado = temps.nuevo();
-                programa.emit(Instruccion.leerIndice(resultado, actual, indice));
+                programa.emit(esIndiceDeCadena(indexado)
+                        ? Instruccion.caracterEn(resultado, actual, indice)
+                        : Instruccion.leerIndice(resultado, actual, indice));
                 actual = resultado;
             } else if (sufijo instanceof PropertyAccessExprContext propiedad) {
                 String nombre = propiedad.Identifier().getText();

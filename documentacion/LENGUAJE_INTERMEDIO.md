@@ -17,6 +17,7 @@ genera TAC.
 | Llamada | `param a` · `t = call f, n` · `call f, n` | `t2 = call suma, 2` |
 | Retorno | `return a` · `return` | `return t3` |
 | Arreglos | `t = newarray n` · `t = a[i]` · `a[i] = b` · `t = len a` | `t0 = a[i]` |
+| Strings por índice | `t = charat s, i` (`s[i]` con `s` string) · `t = strlen s` | `t0 = charat s, i` |
 | Objetos | `t = new Clase, size` · `t = obj.campo @k` · `obj.campo @k = b` | `t0 = new Perro, 24` · `t0.raza @16 = "mestizo"` |
 | Excepciones | `try Lcatch` · `endtry` · `catch e` | ver sección 4 |
 | Strings | `t = concat a, b` · `t = streq a, b` · `t = strne a, b` | `t0 = concat s, "!"` |
@@ -105,7 +106,9 @@ L1:
 ### Arreglos
 
 Un literal reserva el arreglo y asigna cada elemento. Los multidimensionales son literales anidados;
-`a[i][j]` encadena lecturas.
+`a[i][j]` encadena lecturas. Si lo indexado es un string, `s[i]` se emite como `t = charat s, i` y no como
+`a[i]`: un string no tiene la cabecera de longitud de un arreglo. Los strings son inmutables, así que
+`s[i] = x` es un error semántico.
 
 ```
 let m = [[1, 2], [3, 4]];  →   t0 = newarray 2
