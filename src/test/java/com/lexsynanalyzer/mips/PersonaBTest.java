@@ -224,15 +224,15 @@ class PersonaBTest {
         SimuladorMips.Resultado resultado = SimuladorMips.ejecutar(programa.toString());
 
         assertEquals("""
-                → main
-                  → bajar
-                    → bajar
-                      → bajar
-                      ← bajar
-                    ← bajar
-                  ← bajar
+                -> main
+                  -> bajar
+                    -> bajar
+                      -> bajar
+                      <- bajar
+                    <- bajar
+                  <- bajar
                 0
-                ← main
+                <- main
                 """, resultado.salida());
         assertEquals(0, resultado.codigoSalida());
     }

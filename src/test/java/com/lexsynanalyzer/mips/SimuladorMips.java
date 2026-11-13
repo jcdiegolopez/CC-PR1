@@ -15,6 +15,10 @@ import java.util.Map;
  * <p>Lee el texto del {@code .asm} (lo mismo que leería MARS): {@code .data} con {@code .asciiz},
  * {@code .word} y {@code .space}; {@code .text} con etiquetas e instrucciones. Memoria little-endian,
  * {@code lw}/{@code sw} deben estar alineados. Syscalls 1, 4, 9, 10, 11 y 17.
+ *
+ * <p>Strings como en MARS 4.5: cada carácter del {@code .asciiz} ocupa <b>un byte</b> (sus 8 bits bajos) y al
+ * imprimir cada byte vuelve a ser el carácter 0–255. Una tilde ({@code Í} = U+00CD) sale igual, pero un carácter
+ * fuera de Latin-1 ({@code →} = U+2192) se corrompe, igual que en MARS; y {@code strlen("Índice")} es 6.
  */
 final class SimuladorMips {
 
@@ -132,7 +136,16 @@ final class SimuladorMips {
                 texto.append(c);
             }
         }
-        return texto.toString().getBytes(StandardCharsets.UTF_8);
+        return unBytePorCaracter(texto);
+    }
+
+    /** Como MARS: cada {@code char} se guarda truncado a un byte, también los que no son Latin-1. */
+    private static byte[] unBytePorCaracter(CharSequence texto) {
+        byte[] bytes = new byte[texto.length()];
+        for (int i = 0; i < texto.length(); i++) {
+            bytes[i] = (byte) texto.charAt(i);
+        }
+        return bytes;
     }
 
     private static String sinComentario(String linea) {
@@ -218,7 +231,7 @@ final class SimuladorMips {
                 case "syscall" -> {
                     Integer codigo = syscall();
                     if (codigo != null) {
-                        return new Resultado(salida.toString(StandardCharsets.UTF_8), codigo, pasos);
+                        return new Resultado(salida.toString(StandardCharsets.ISO_8859_1), codigo, pasos);
                     }
                 }
                 default -> throw new IllegalStateException("Instrucción no soportada: " + String.join(" ", ins));
@@ -267,7 +280,7 @@ final class SimuladorMips {
     }
 
     private void escribir(String texto) {
-        salida.writeBytes(texto.getBytes(StandardCharsets.UTF_8));
+        salida.writeBytes(texto.getBytes(StandardCharsets.ISO_8859_1));
     }
 
     private void poner(String registro, int valor) {

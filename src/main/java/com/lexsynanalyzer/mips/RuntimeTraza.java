@@ -2,7 +2,11 @@ package com.lexsynanalyzer.mips;
 
 import java.util.List;
 
-/** Rutinas opcionales que imprimen las entradas y salidas de los frames de activación. */
+/**
+ * Rutinas opcionales que imprimen las entradas y salidas de los frames de activación ({@code -> f} y
+ * {@code <- f}). Las flechas son ASCII a propósito: MARS guarda cada carácter de un {@code .asciiz} en un
+ * byte, así que {@code →} (U+2192) se imprimiría corrupto; las tildes (Latin-1) sí salen bien.
+ */
 final class RuntimeTraza {
 
     private static final String ENTRAR = "__trace_enter";
@@ -24,7 +28,7 @@ final class RuntimeTraza {
         ProgramaMips programa = contexto.programa();
         programa.dato(PROFUNDIDAD, ".word 0");
         programa.requerir(ENTRAR);
-        programa.emit(InstruccionMips.de("la", "$a0", programa.cadena("→ " + contexto.funcion())));
+        programa.emit(InstruccionMips.de("la", "$a0", programa.cadena("-> " + contexto.funcion())));
         programa.emit(InstruccionMips.de("jal", ENTRAR));
     }
 
@@ -34,7 +38,7 @@ final class RuntimeTraza {
         }
         ProgramaMips programa = contexto.programa();
         programa.requerir(SALIR);
-        programa.emit(InstruccionMips.de("la", "$a0", programa.cadena("← " + contexto.funcion())));
+        programa.emit(InstruccionMips.de("la", "$a0", programa.cadena("<- " + contexto.funcion())));
         programa.emit(InstruccionMips.de("jal", SALIR));
     }
 
