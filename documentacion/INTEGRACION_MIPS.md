@@ -84,7 +84,8 @@ distintas, falta una de las llamadas de la tabla.
 - `foreach` sobre strings usa operaciones TAC tipadas `strlen` y `charat`; `switch` sobre strings usa
   `streq`; las variables `catch` tienen tipo `string`.
 - Para trazar llamadas, usa `new GeneradorMIPS(layout, FabricaRegistros.GETREG, true)`. La traza imprime
-  `→ función` al entrar y `← función` al salir, con indentación por profundidad.
+  `-> función` al entrar y `<- función` al salir, con indentación por profundidad (en ASCII: MARS guarda
+  un byte por carácter y `→` saldría corrupto).
 - Las funciones anidadas reciben etiquetas y frames independientes. No se implementan cierres ni acceso a
   variables locales de una función contenedora.
 
@@ -101,8 +102,11 @@ Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`), `TraductorMemoria`
   "Copiar" y "Guardar .asm" (UTF-8, nombre sugerido a partir del `.cps`).
 - `LexSynAnalyzer` pasa el programa por `Mirilla`: `mips` es el optimizado, `mipsSinOptimizar` el original y
   `mirilla` el conteo por regla. Las 10 reglas están en `CODIGO_MIPS.md` §8.
-- `EjecutorMars` + `EjecucionMarsTest` corren en MARS real, desde `mvn test`, lo que entrega el IDE y la
-  versión ingenua de cada programa de prueba (ver `CODIGO_MIPS.md` §6).
+- `EjecutorMars` (en `src/main`) + `EjecucionMarsTest` corren en MARS real, desde `mvn test`, lo que entrega el IDE
+  y la versión ingenua de cada programa de prueba (ver `CODIGO_MIPS.md` §6). El mismo `EjecutorMars` está detrás
+  del botón "Ejecutar en MARS" de la pestaña MIPS.
+- Casos nuevos: basta con `nombre.cps` + `nombre.salida` en `src/test/resources/mips/`; `BateriaMipsTest`,
+  `MirillaMipsTest` y `EjecucionMarsTest` los toman solos (convenciones en `CasosMips`).
 
 1. **`RuntimeMemoria`**: `registrarRutina("__alloc", ...)`. Recibe los bytes en `$a0` y devuelve la dirección
    en `$v0` (syscall 9). Solo puede usar `$a*`, `$v*`, `$t8` y `$t9`.

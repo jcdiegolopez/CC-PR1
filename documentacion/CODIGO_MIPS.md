@@ -25,6 +25,7 @@ ProgramaTAC ──► GeneradorMIPS ──(un Traductor por op)──► Program
 | `TraductorMemoria` | `newarray`, `a[i]`, `a[i] = v`, `len`, `strlen`, `charat`, `new`, lectura y escritura de campos. |
 | `RuntimeMemoria` | `__alloc` y `__error_indice`. |
 | `mirilla.Mirilla`, `mirilla.Regla*` | Optimización por mirilla sobre la lista de `InstruccionMips` (§8). |
+| `EjecutorMars` | Corre un `.asm` en MARS 4.5 por consola y dice cómo terminó (tests y botón del IDE). |
 
 `GeneradorMIPS(ubicaciones, FabricaRegistros.GETREG | FabricaRegistros.INGENUO)` elige el asignador.
 
@@ -210,6 +211,11 @@ Los prólogos/epílogos, `param`/`call`/`return` y el trazado opcional de funcio
   método y constructor heredados, sobrescritura), `try_indice` (el error ocurre dentro de una función) y
   `error_indice` (sin `try`: mensaje y código 1), en los dos modos. `indice_string` lee `s[i]`, también
   sobre un elemento de un arreglo de strings y fuera de rango dentro de un `try`.
+- `BateriaMipsTest`: todos los `.cps` de `src/test/resources/mips` en los dos modos (ver `CasosMips`: los `traza_*`
+  se compilan con traza). Incluye los casos con nombre de la rúbrica: `parametros`, `anidadas`, `recursion_*`,
+  `traza_fib`, `try_div0`, `try_anidado` (también un error dentro de un `catch`), `try_con_break_return`,
+  `try_en_funcion`, `control_while`, `control_do_while`, `control_for`, `foreach`, `cortocircuito` (llamadas que
+  imprimen) y `constructor`, `herencia_constructor`, `sobrescritura`.
 - `ProgramasAleatoriosTest`: **prueba diferencial**. 300 programas aleatorios (semilla fija) con enteros
   que desbordan, booleanos con cortocircuito, strings, ternarios, if/else, while, do-while, switch,
   break, continue, bloques que sombrean variables, llamadas (una función recursiva y otra que modifica
@@ -222,7 +228,7 @@ como `<`, y variables vivas que no cruzan bloques). Las cinco hacen fallar tests
 
 Los tests usan `SimuladorMips` (en `src/test`), un simulador mínimo del subconjunto de MIPS que se genera,
 para que la salida se compruebe en cada `mvn test` sin MARS. **No reemplaza a MARS.** Cada `.asm` queda en
-`target/asm/` (los aleatorios en `target/asm/aleatorios/`, con su `.cps` y su `.salida`). Los 393 `.asm` (contando los `_opt.asm` de la mirilla)
+`target/asm/` (los aleatorios en `target/asm/aleatorios/`, con su `.cps` y su `.salida`). Los 453 `.asm` (contando los `_opt.asm` de la mirilla)
 dan la salida esperada en MARS 4.5:
 
 ```
@@ -236,7 +242,7 @@ Con `-Dfile.encoding=UTF-8` las tildes salen bien. MARS agrega una línea en bla
 `MipsDePrueba` delega ahora al generador de producción. Las funciones anidadas tienen etiquetas y frames
 independientes, pero no cierres ni acceso a locales de la función contenedora.
 
-`EjecucionMarsTest` corre en **MARS real** desde `mvn test`, con `EjecutorMars` (en `src/test`): cada programa
+`EjecucionMarsTest` corre en **MARS real** desde `mvn test`, con `EjecutorMars` (en `src/main`, porque también lo usa el botón "Ejecutar en MARS" del IDE): cada programa
 de `src/test/resources/mips` tal como lo entrega el IDE (GetReg + mirilla) y en modo ingenuo sin mirilla,
 más `print(1 + 2);`. El comando es
 `java -Djava.awt.headless=true -Dfile.encoding=UTF-8 -jar tools/Mars4_5.jar nc ae98 se99 sm 1000000 archivo.asm`, con un tope de 10 s.
@@ -258,6 +264,9 @@ Cómo conectan B y C sus traductores: `INTEGRACION_MIPS.md`.
 - Acceder a un campo o a una casilla de una referencia `null` no se chequea: MARS se detiene con un error
   de dirección inválida.
 - Los caracteres no ASCII (`ó`, `í`) dependen de que MARS lea el `.asm` como UTF-8.
+- MARS guarda **un byte por carácter** de un `.asciiz`: las tildes y la `ñ` (Latin-1) salen bien, pero un
+  carácter fuera de Latin-1 en un string de Compiscript (`→`, emojis) se imprime corrupto. `SimuladorMips` hace
+  lo mismo, así que los tests lo detectan. Por eso la traza usa `->` y `<-`.
 
 ## 8. Optimización por mirilla
 
@@ -300,7 +309,7 @@ Detalles que hacen correcta cada regla:
 - **10:** cuenta como uso cualquier operando (`j`, `b*`, `jal`, `la $t9, L0` del `try`). Al quitar la etiqueta
   de una rutina de error que nadie llama, la regla 6 borra su cuerpo en la pasada siguiente.
 
-Efecto sobre los programas de `src/test/resources/mips` (modo `GETREG`, el del IDE): 4330 → 4232
+Efecto sobre los programas de `src/test/resources/mips` (modo `GETREG`, el del IDE): 7276 → 7104
 instrucciones. Donde más quita es en código con saltos y llamadas (`funciones`: 410 → 394; `control_ciclos`:
 178 → 170, con 3 inversiones de rama). En programas sin saltos `GetReg` ya deja pocas cargas de más, así que
 a veces solo cae una etiqueta; en modo ingenuo todos los programas quedan más cortos.

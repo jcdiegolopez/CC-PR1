@@ -61,7 +61,8 @@ El sistema implementa el pipeline completo de un compilador: análisis, **códig
          ├───> SyntaxTreePanel   (Explorador visual del ParseTree con JTree)
          ├───> TacPanel          (Código intermedio generado)
          ├───> SimbolosPanel     (Tabla de símbolos con offsets, frames y clases)
-         └───> MipsPanel         (Ensamblador, "Ver sin optimizar", mirilla, Guardar .asm)  ──>  MARS 4.5
+         └───> MipsPanel         (Ensamblador, "Ver sin optimizar", mirilla, Guardar .asm,  ──>  MARS 4.5
+                                  Ejecutar en MARS vía EjecutorMars)
 ```
 
 ---
@@ -126,7 +127,7 @@ Ver la convención de registros, la tabla TAC → MIPS, `getReg` paso a paso, el
 - **`SyntaxTreePanel`**: Explorador en árbol interactivo (`JTree`) que convierte el `ParseTree` de ANTLR4 en nodos visuales. Aplica resaltado de sintaxis (reglas no terminales en verde azulado, palabras clave en azul, literales en naranja/verde claro, identificadores en azul claro) y ofrece botones para expandir o colapsar nodos.
 - **`TacPanel`** (pestaña *Código Intermedio (TAC)*): Muestra el programa TAC con numeración de líneas y colores por tipo de línea (cabeceras de función, etiquetas, saltos y excepciones). Si el programa tiene errores muestra: *"No se generó código intermedio porque el programa tiene errores."*
 - **`SimbolosPanel`** (pestaña *Tabla de Símbolos / Registros de Activación*): Tabla con el ámbito (región estática, cada `function` con su tamaño final de frame incluidos los temporales, cada `class` con su tamaño de instancia), nombre fuente, nombre TAC, categoría, tipo, offset y tamaño de cada variable, parámetro y campo.
-- **`MipsPanel`** (pestaña *Código Ensamblador (MIPS)*): Muestra el `.asm` optimizado con numeración de líneas y resaltado (etiquetas, directivas, saltos, strings y comentarios). El botón *Ver sin optimizar* alterna con la versión anterior a la mirilla, y una línea resume la mirilla (`Mirilla: 16 instrucciones eliminadas (sw/lw ×4, …)`). *Copiar* y *Guardar .asm* (UTF-8, nombre sugerido a partir del `.cps`) dejan el archivo listo para MARS. Con errores muestra: *"No se generó código ensamblador porque el programa tiene errores."*; si el backend falló con un programa válido, muestra la causa.
+- **`MipsPanel`** (pestaña *Código Ensamblador (MIPS)*): Muestra el `.asm` optimizado con numeración de líneas y resaltado (etiquetas, directivas, saltos, strings y comentarios). El botón *Ver sin optimizar* alterna con la versión anterior a la mirilla, y una línea resume la mirilla (`Mirilla: 16 instrucciones eliminadas (sw/lw ×4, …)`). *Copiar* y *Guardar .asm* (UTF-8, nombre sugerido a partir del `.cps`) dejan el archivo listo para MARS, y *Ejecutar en MARS* lo corre en `tools/Mars4_5.jar` en segundo plano (`SwingWorker`) y muestra la salida, el código de salida y el tiempo en un panel debajo del código. Con errores muestra: *"No se generó código ensamblador porque el programa tiene errores."*; si el backend falló con un programa válido, muestra la causa.
 
 ---
 
@@ -145,5 +146,5 @@ Ver la convención de registros, la tabla TAC → MIPS, `getReg` paso a paso, el
 ## 4. Verificación
 
 - **`SimuladorMips`** (en `src/test`): simulador mínimo del subconjunto de MIPS que se genera, para comprobar la salida de cada programa en cada `mvn test`. Todos los casos de `src/test/resources/mips` (`.cps` + `.salida`) corren con los dos asignadores, con y sin mirilla, y 300 programas aleatorios se comparan contra un intérprete de referencia independiente del compilador.
-- **`EjecutorMars`** (en `src/test`): corre los mismos programas en **MARS 4.5 real** desde JUnit (`java -Djava.awt.headless=true -jar tools/Mars4_5.jar nc ae98 se99 sm 1000000 archivo.asm`, tope de 10 s) y compara salida y código de salida. Si `tools/Mars4_5.jar` no está, esas pruebas se saltan.
+- **`EjecutorMars`** (`com.lexsynanalyzer.mips`): corre los mismos programas en **MARS 4.5 real** desde JUnit (`java -Djava.awt.headless=true -jar tools/Mars4_5.jar nc ae98 se99 sm 1000000 archivo.asm`, tope de 10 s) y compara salida y código de salida. Si `tools/Mars4_5.jar` no está, esas pruebas se saltan. El IDE usa la misma clase para el botón *Ejecutar en MARS*.
 - **`tools/probar_mars.sh`**: corre en MARS todos los `.asm` que deja `mvn test` en `target/asm/`.
