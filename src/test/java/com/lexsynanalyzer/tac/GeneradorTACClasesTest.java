@@ -38,8 +38,8 @@ class GeneradorTACClasesTest {
 
         assertTrue(tac.contains("""
                 t0 = new B, 8
-                t0.x = 1
-                t0.y = 2
+                t0.x @0 = 1
+                t0.y @4 = 2
                 param t0
                 param 5
                 call A_constructor, 2

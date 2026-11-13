@@ -17,7 +17,7 @@ genera TAC.
 | Llamada | `param a` · `t = call f, n` · `call f, n` | `t2 = call suma, 2` |
 | Retorno | `return a` · `return` | `return t3` |
 | Arreglos | `t = newarray n` · `t = a[i]` · `a[i] = b` · `t = len a` | `t0 = a[i]` |
-| Objetos | `t = new Clase, size` · `t = obj.campo` · `obj.campo = b` | `t0 = new Perro, 24` |
+| Objetos | `t = new Clase, size` · `t = obj.campo @k` · `obj.campo @k = b` | `t0 = new Perro, 24` · `t0.raza @16 = "mestizo"` |
 | Excepciones | `try Lcatch` · `endtry` · `catch e` | ver sección 4 |
 | Strings | `t = concat a, b` · `t = streq a, b` · `t = strne a, b` | `t0 = concat s, "!"` |
 | Salida | `print a` (entero) · `prints a` (string) · `printb a` (booleano) | `prints t0` |
@@ -476,7 +476,10 @@ return t0
 endfunc
 ```
 
-Los campos se leen y escriben siempre a través de un objeto: `t = obj.campo`, `obj.campo = v`.
+Los campos se leen y escriben siempre a través de un objeto: `t = obj.campo @k`, `obj.campo @k = v`.
+`@k` es el offset del campo dentro del objeto, tomado del `Layout` del tipo estático de `obj`. Así el
+generador MIPS traduce el acceso a `lw`/`sw` con `k(obj)` sin volver a calcular offsets. Como los campos
+del padre van primero, el offset de un campo heredado es el mismo en la clase hija.
 
 ### Herencia y despacho estático
 

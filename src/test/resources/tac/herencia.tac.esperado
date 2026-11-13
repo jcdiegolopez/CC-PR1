@@ -1,7 +1,7 @@
 function main, 28
 t0 = new Perro, 24
-t0.patas = 4
-t0.raza = "mestizo"
+t0.patas @8 = 4
+t0.raza @16 = "mestizo"
 param t0
 param "Toby"
 call Animal_constructor, 2
@@ -18,10 +18,10 @@ t0 = call Animal_hablar, 1
 prints t0
 endfunc
 function Animal_constructor, 40
-this.nombre = nombre
+this.nombre @0 = nombre
 endfunc
 function Animal_hablar, 36
-t0 = this.nombre
+t0 = this.nombre @0
 t0 = concat t0, " hace ruido."
 return t0
 endfunc
@@ -31,7 +31,7 @@ t0 = call Animal_hablar, 1
 return t0
 endfunc
 function Perro_hablar, 36
-t0 = this.nombre
+t0 = this.nombre @0
 t0 = concat t0, " ladra."
 return t0
 endfunc
