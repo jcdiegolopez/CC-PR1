@@ -25,16 +25,18 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class EjecucionMarsTest {
 
-    private static final Path CASOS = Path.of("src", "test", "resources", "mips");
-    private static final Set<String> TERMINAN_CON_ERROR = Set.of("division_cero", "error_indice");
-
     @BeforeAll
     static void requiereMars() {
         assumeTrue(EjecutorMars.disponible(), "No está " + EjecutorMars.JAR + ": se saltan las pruebas en MARS");
     }
 
     static List<String> programas() {
-        return MirillaMipsTest.programas();
+        return CasosMips.todos();
+    }
+
+    /** El IDE nunca compila en modo traza, así que esos casos van solo en la versión ingenua. */
+    static List<String> programasDelIde() {
+        return CasosMips.todos().stream().filter(caso -> !CasosMips.usaTraza(caso)).toList();
     }
 
     @Test
@@ -48,9 +50,9 @@ class EjecucionMarsTest {
     }
 
     @ParameterizedTest(name = "{0} (IDE: getreg + mirilla)")
-    @MethodSource("programas")
+    @MethodSource("programasDelIde")
     void loQueEntregaElIdeCorreEnMars(String caso) {
-        AnalysisResult analisis = LexSynAnalyzer.analizarTexto(leer(caso + ".cps"));
+        AnalysisResult analisis = LexSynAnalyzer.analizarTexto(CasosMips.fuente(caso));
         assertTrue(analisis.tieneMips(), caso);
 
         assertCorre(caso, EjecutorMars.ejecutar(analisis.mips().toString()));
@@ -59,8 +61,7 @@ class EjecucionMarsTest {
     @ParameterizedTest(name = "{0} (ingenuo, sin mirilla)")
     @MethodSource("programas")
     void elAsignadorIngenuoCorreEnMars(String caso) {
-        assertCorre(caso, EjecutorMars.ejecutar(
-                MipsDePrueba.compilar(leer(caso + ".cps"), FabricaRegistros.INGENUO).toString()));
+        assertCorre(caso, EjecutorMars.ejecutar(CasosMips.compilar(caso, FabricaRegistros.INGENUO, false).toString()));
     }
 
     @Test
@@ -81,15 +82,7 @@ class EjecucionMarsTest {
 
     private static void assertCorre(String caso, EjecutorMars.Resultado resultado) {
         assertEquals(EjecutorMars.Estado.TERMINO, resultado.estado(), () -> caso + "\n" + resultado.salida());
-        assertEquals(leer(caso + ".salida").stripTrailing(), resultado.salida(), caso);
-        assertEquals(TERMINAN_CON_ERROR.contains(caso) ? 1 : 0, resultado.codigoSalida(), caso);
-    }
-
-    private static String leer(String archivo) {
-        try {
-            return Files.readString(CASOS.resolve(archivo)).replace("\r\n", "\n");
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        assertEquals(CasosMips.salida(caso).stripTrailing(), resultado.salida(), caso);
+        assertEquals(CasosMips.codigoEsperado(caso), resultado.codigoSalida(), caso);
     }
 }

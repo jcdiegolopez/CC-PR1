@@ -28,9 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class MirillaMipsTest {
 
-    private static final Path CASOS = Path.of("src", "test", "resources", "mips");
     private static final Path SALIDA_ASM = Path.of("target", "asm");
-    private static final Set<String> TERMINAN_CON_ERROR = Set.of("division_cero", "error_indice");
 
     static Stream<Arguments> casos() {
         return programas().stream().flatMap(caso -> Stream.of(
@@ -39,28 +37,20 @@ class MirillaMipsTest {
     }
 
     static List<String> programas() {
-        try (Stream<Path> archivos = Files.list(CASOS)) {
-            return archivos.map(p -> p.getFileName().toString())
-                    .filter(nombre -> nombre.endsWith(".cps"))
-                    .map(nombre -> nombre.substring(0, nombre.length() - ".cps".length()))
-                    .sorted()
-                    .toList();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return CasosMips.todos();
     }
 
     @ParameterizedTest(name = "{0} ({1})")
     @MethodSource("casos")
     void optimizadoImprimeLoMismoYEsMasCorto(String caso, String modo, FabricaRegistros fabrica) {
-        ProgramaMips original = MipsDePrueba.compilar(leer(caso + ".cps"), fabrica);
+        ProgramaMips original = CasosMips.compilar(caso, fabrica, false);
         ProgramaMips optimizado = new Mirilla().optimizar(original).programa();
         guardar(caso + "_" + modo + "_opt.asm", optimizado.toString());
 
         SimuladorMips.Resultado resultado = SimuladorMips.ejecutar(optimizado.toString());
 
-        assertEquals(leer(caso + ".salida"), resultado.salida());
-        assertEquals(TERMINAN_CON_ERROR.contains(caso) ? 1 : 0, resultado.codigoSalida());
+        assertEquals(CasosMips.salida(caso), resultado.salida());
+        assertEquals(CasosMips.codigoEsperado(caso), resultado.codigoSalida());
         // GetReg ya evita casi todos los lw/sw de más: en programas sin saltos puede no quedar nada que quitar.
         int antes = original.cantidadInstrucciones();
         int despues = optimizado.cantidadInstrucciones();
@@ -73,7 +63,7 @@ class MirillaMipsTest {
 
     @Test
     void elAnalizadorEntregaLasDosVersionesYLasEstadisticas() {
-        AnalysisResult resultado = LexSynAnalyzer.analizarTexto(leer("control_ciclos.cps"));
+        AnalysisResult resultado = LexSynAnalyzer.analizarTexto(CasosMips.fuente("control_ciclos"));
 
         assertTrue(resultado.tieneMips());
         assertFalse(resultado.mirilla().isEmpty());
@@ -87,8 +77,7 @@ class MirillaMipsTest {
         Set<String> usadas = new TreeSet<>();
         for (String caso : programas()) {
             for (FabricaRegistros modo : List.of(FabricaRegistros.INGENUO, FabricaRegistros.GETREG)) {
-                usadas.addAll(new Mirilla().optimizar(MipsDePrueba.compilar(leer(caso + ".cps"), modo))
-                        .aplicaciones().keySet());
+                usadas.addAll(new Mirilla().optimizar(CasosMips.compilar(caso, modo, false)).aplicaciones().keySet());
             }
         }
         assertTrue(usadas.size() >= 6, usadas::toString);
@@ -98,14 +87,6 @@ class MirillaMipsTest {
         try {
             Files.createDirectories(SALIDA_ASM);
             Files.writeString(SALIDA_ASM.resolve(archivo), asm);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    private static String leer(String archivo) {
-        try {
-            return Files.readString(CASOS.resolve(archivo)).replace("\r\n", "\n");
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

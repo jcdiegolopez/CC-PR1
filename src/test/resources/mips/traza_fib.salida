@@ -1,0 +1,13 @@
+-> main
+  -> fib
+    -> fib
+      -> fib
+      <- fib
+      -> fib
+      <- fib
+    <- fib
+    -> fib
+    <- fib
+  <- fib
+2
+<- main
