@@ -1,5 +1,8 @@
 package com.lexsynanalyzer.analyzer;
 
+import com.lexsynanalyzer.mips.FabricaRegistros;
+import com.lexsynanalyzer.mips.GeneradorMIPS;
+import com.lexsynanalyzer.mips.ProgramaMips;
 import com.lexsynanalyzer.parser.LexSynAnalyzerLexer;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser;
 import com.lexsynanalyzer.semantic.AnalizadorSemantico;
@@ -54,15 +57,26 @@ public final class LexSynAnalyzer {
             semantico.analizar(arbol);
         }
 
-        // Con cualquier error léxico, sintáctico o semántico no se genera código intermedio.
+        // Con cualquier error léxico, sintáctico o semántico no se genera código intermedio ni ensamblador.
         ProgramaTAC tac = ProgramaTAC.vacio();
         Layout layout = null;
+        ProgramaMips mips = ProgramaMips.vacio();
+        String falloMips = null;
         if (errores.isEmpty()) {
             layout = AsignadorMemoria.asignar(semantico.resultado());
             tac = new GeneradorTAC(layout).generar(arbol);
+            // El ensamblador sale solo del TAC y del Layout, nunca del árbol sintáctico. Si el backend no
+            // soporta una construcción válida (closures), el análisis y el TAC se conservan igual.
+            try {
+                mips = new GeneradorMIPS(layout, FabricaRegistros.GETREG).generar(tac);
+            } catch (RuntimeException e) {
+                mips = ProgramaMips.vacio();
+                falloMips = e.getMessage();
+            }
         }
 
-        return new AnalysisResult(sinDuplicadosYOrdenados(errores), arbol, parser.getRuleNames(), tac, layout);
+        return new AnalysisResult(sinDuplicadosYOrdenados(errores), arbol, parser.getRuleNames(), tac, layout,
+                mips, mips, Map.of(), falloMips);
     }
 
     private static List<AnalysisError> sinDuplicadosYOrdenados(List<AnalysisError> errores) {

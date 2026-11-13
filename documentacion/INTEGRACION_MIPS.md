@@ -90,8 +90,19 @@ distintas, falta una de las llamadas de la tabla.
 
 ## 4. Persona C
 
-Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`) y `TraductorMemoria` (puntos 1 y 2).
-Pendiente: mirilla, `EjecutorMars` y la conexión con `LexSynAnalyzer` y la GUI.
+Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`), `TraductorMemoria` (puntos 1 y 2) y la conexión
+con el IDE (punto 5):
+
+- `LexSynAnalyzer` genera el MIPS con `GETREG` cuando no hay errores. `AnalysisResult` trae `mips`,
+  `mipsSinOptimizar`, `mirilla` (veces por regla) y `falloMips`.
+- Si el generador lanza una excepción con un programa válido (por ejemplo, un closure), el análisis y el TAC
+  se conservan; `falloMips` trae la causa y la pestaña MIPS la muestra.
+- Pestaña "Código Ensamblador (MIPS)" (`MipsPanel`): resaltado, "Ver sin optimizar", resumen de la mirilla,
+  "Copiar" y "Guardar .asm" (UTF-8, nombre sugerido a partir del `.cps`).
+- Para enchufar la mirilla: en `LexSynAnalyzer`, pasar el programa optimizado como `mips`, el original como
+  `mipsSinOptimizar` y el conteo por regla como `mirilla`. La GUI no necesita cambios.
+
+Pendiente: mirilla y `EjecutorMars`.
 
 1. **`RuntimeMemoria`**: `registrarRutina("__alloc", ...)`. Recibe los bytes en `$a0` y devuelve la dirección
    en `$v0` (syscall 9). Solo puede usar `$a*`, `$v*`, `$t8` y `$t9`.

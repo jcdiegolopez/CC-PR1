@@ -39,6 +39,7 @@ public class LexSynAnalyzerGui extends JFrame {
     private final ResultsTablePanel resultsPanel;
     private final SyntaxTreePanel syntaxTreePanel;
     private final TacPanel tacPanel;
+    private final MipsPanel mipsPanel;
     private final SimbolosPanel simbolosPanel;
     private final JTabbedPane tabbedPane;
     private final JButton btnAbrir;
@@ -145,6 +146,7 @@ public class LexSynAnalyzerGui extends JFrame {
 
         syntaxTreePanel = new SyntaxTreePanel();
         tacPanel = new TacPanel();
+        mipsPanel = new MipsPanel();
         simbolosPanel = new SimbolosPanel();
 
         tabbedPane = new JTabbedPane();
@@ -157,6 +159,7 @@ public class LexSynAnalyzerGui extends JFrame {
         tabbedPane.addTab("Tabla de Errores y Diagnósticos", resultsPanel);
         tabbedPane.addTab("Árbol Sintáctico (ParseTree)", syntaxTreePanel);
         tabbedPane.addTab("Código Intermedio (TAC)", tacPanel);
+        tabbedPane.addTab("Código Ensamblador (MIPS)", mipsPanel);
         tabbedPane.addTab("Tabla de Símbolos / Registros de Activación", simbolosPanel);
 
         // 4. SplitPane Redimensionable (Vertical: Editor arriba, Pestañas abajo)
@@ -330,6 +333,10 @@ public class LexSynAnalyzerGui extends JFrame {
         return tacPanel;
     }
 
+    public MipsPanel getMipsPanel() {
+        return mipsPanel;
+    }
+
     public SimbolosPanel getSimbolosPanel() {
         return simbolosPanel;
     }
@@ -364,6 +371,7 @@ public class LexSynAnalyzerGui extends JFrame {
                 resultsPanel.limpiar();
                 syntaxTreePanel.limpiar();
                 tacPanel.limpiar();
+                mipsPanel.limpiar();
                 simbolosPanel.limpiar();
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this, "Error al leer el archivo:\n" + ex.getMessage(),
@@ -385,7 +393,7 @@ public class LexSynAnalyzerGui extends JFrame {
 
         actualizarEstadoBotonAnalizar(false);
         btnAbrir.setEnabled(false);
-        lblStatusBar.setText(" [BUSY] Ejecutando análisis y generación de código intermedio...");
+        lblStatusBar.setText(" [BUSY] Ejecutando análisis y generación de código intermedio y ensamblador...");
 
         SwingWorker<AnalysisResult, Void> worker = new SwingWorker<>() {
             @Override
@@ -420,6 +428,15 @@ public class LexSynAnalyzerGui extends JFrame {
                     } else {
                         tacPanel.mostrarSinTac();
                         simbolosPanel.mostrarSinDatos();
+                    }
+
+                    if (result.tieneMips()) {
+                        mipsPanel.mostrarMips(result.mips(), result.mipsSinOptimizar(), result.mirilla(),
+                                nombreBase(archivoActual));
+                    } else if (result.falloMips() != null) {
+                        mipsPanel.mostrarFallo(result.falloMips());
+                    } else {
+                        mipsPanel.mostrarSinMips();
                     }
                 } catch (InterruptedException | ExecutionException ex) {
                     JOptionPane.showMessageDialog(LexSynAnalyzerGui.this,
@@ -456,6 +473,13 @@ public class LexSynAnalyzerGui extends JFrame {
         }
     }
 
+    /** {@code prueba.cps} → {@code prueba}: nombre sugerido para el {@code .asm}. */
+    private static String nombreBase(File archivo) {
+        String nombre = archivo.getName();
+        int punto = nombre.lastIndexOf('.');
+        return punto > 0 ? nombre.substring(0, punto) : nombre;
+    }
+
     private void marcarCambiosSinGuardar() {
         if (archivoActual != null && !hasUnsavedChanges) {
             hasUnsavedChanges = true;
@@ -471,6 +495,7 @@ public class LexSynAnalyzerGui extends JFrame {
         resultsPanel.limpiar();
         syntaxTreePanel.limpiar();
         tacPanel.limpiar();
+        mipsPanel.limpiar();
         simbolosPanel.limpiar();
         tabbedPane.setTitleAt(0, "Tabla de Errores y Diagnósticos");
         tabbedPane.setTitleAt(1, "Árbol Sintáctico (ParseTree)");
