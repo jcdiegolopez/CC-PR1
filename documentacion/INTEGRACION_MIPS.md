@@ -91,7 +91,7 @@ distintas, falta una de las llamadas de la tabla.
 ## 4. Persona C
 
 Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`), `TraductorMemoria` (puntos 1 y 2), la mirilla
-(punto 3) y la conexión con el IDE (punto 5):
+(punto 3), `EjecutorMars` (punto 4) y la conexión con el IDE (punto 5):
 
 - `LexSynAnalyzer` genera el MIPS con `GETREG` cuando no hay errores. `AnalysisResult` trae `mips`,
   `mipsSinOptimizar`, `mirilla` (veces por regla) y `falloMips`.
@@ -101,8 +101,8 @@ Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`), `TraductorMemoria`
   "Copiar" y "Guardar .asm" (UTF-8, nombre sugerido a partir del `.cps`).
 - `LexSynAnalyzer` pasa el programa por `Mirilla`: `mips` es el optimizado, `mipsSinOptimizar` el original y
   `mirilla` el conteo por regla. Las 10 reglas están en `CODIGO_MIPS.md` §8.
-
-Pendiente: `EjecutorMars`.
+- `EjecutorMars` + `EjecucionMarsTest` corren en MARS real, desde `mvn test`, lo que entrega el IDE y la
+  versión ingenua de cada programa de prueba (ver `CODIGO_MIPS.md` §6).
 
 1. **`RuntimeMemoria`**: `registrarRutina("__alloc", ...)`. Recibe los bytes en `$a0` y devuelve la dirección
    en `$v0` (syscall 9). Solo puede usar `$a*`, `$v*`, `$t8` y `$t9`.
@@ -129,7 +129,8 @@ Pendiente: `EjecutorMars`.
    - Los comentarios `# derrame tN` se conservan en la versión sin optimizar (el test los busca ahí); en la
      optimizada desaparecen si la mirilla quita el `sw` que los llevaba.
 4. **`EjecutorMars`**:
-   - Comando: `java -Dfile.encoding=UTF-8 -jar tools/Mars4_5.jar nc sm 1000000 archivo.asm`.
+   - Comando: `java -Djava.awt.headless=true -Dfile.encoding=UTF-8 -jar tools/Mars4_5.jar nc ae98 se99 sm 1000000 archivo.asm`.
+     Sin `ae`/`se`, MARS sale con 0 aunque falle; el límite de pasos se detecta por su mensaje.
    - Ignora los espacios y los saltos de línea al final de la salida.
    - Si el jar no existe, el test se salta con `Assumptions`.
    - `tools/probar_mars.sh` hace lo mismo en bash.

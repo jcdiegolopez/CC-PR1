@@ -222,7 +222,7 @@ como `<`, y variables vivas que no cruzan bloques). Las cinco hacen fallar tests
 
 Los tests usan `SimuladorMips` (en `src/test`), un simulador mínimo del subconjunto de MIPS que se genera,
 para que la salida se compruebe en cada `mvn test` sin MARS. **No reemplaza a MARS.** Cada `.asm` queda en
-`target/asm/` (los aleatorios en `target/asm/aleatorios/`, con su `.cps` y su `.salida`). Los 325 programas
+`target/asm/` (los aleatorios en `target/asm/aleatorios/`, con su `.cps` y su `.salida`). Los 393 `.asm` (contando los `_opt.asm` de la mirilla)
 dan la salida esperada en MARS 4.5:
 
 ```
@@ -236,7 +236,16 @@ Con `-Dfile.encoding=UTF-8` las tildes salen bien. MARS agrega una línea en bla
 `MipsDePrueba` delega ahora al generador de producción. Las funciones anidadas tienen etiquetas y frames
 independientes, pero no cierres ni acceso a locales de la función contenedora.
 
-`bash tools/probar_mars.sh` corre en MARS todos los `.asm` de `target/asm/` (después de `mvn test`).
+`EjecucionMarsTest` corre en **MARS real** desde `mvn test`, con `EjecutorMars` (en `src/test`): cada programa
+de `src/test/resources/mips` tal como lo entrega el IDE (GetReg + mirilla) y en modo ingenuo sin mirilla,
+más `print(1 + 2);`. El comando es
+`java -Djava.awt.headless=true -Dfile.encoding=UTF-8 -jar tools/Mars4_5.jar nc ae98 se99 sm 1000000 archivo.asm`, con un tope de 10 s.
+MARS sale con 0 aunque se acabe el límite de pasos (solo lo avisa en la salida) o haya un error de ejecución,
+así que `ae98`/`se99` dan un código propio a los errores de ensamblado y de ejecución, y el límite se detecta
+por su mensaje. Si `tools/Mars4_5.jar` no está, la clase se salta (`Assumptions`) en vez de fallar.
+
+`bash tools/probar_mars.sh` corre en MARS todos los `.asm` de `target/asm/` (después de `mvn test`),
+incluidos los aleatorios y los `_opt.asm` de la mirilla.
 Cómo conectan B y C sus traductores: `INTEGRACION_MIPS.md`.
 
 ## 7. Limitaciones conocidas
@@ -291,7 +300,7 @@ Detalles que hacen correcta cada regla:
 - **10:** cuenta como uso cualquier operando (`j`, `b*`, `jal`, `la $t9, L0` del `try`). Al quitar la etiqueta
   de una rutina de error que nadie llama, la regla 6 borra su cuerpo en la pasada siguiente.
 
-Efecto sobre los programas de `src/test/resources/mips` (modo `GETREG`, el del IDE): 3583 → 3513
+Efecto sobre los programas de `src/test/resources/mips` (modo `GETREG`, el del IDE): 4330 → 4232
 instrucciones. Donde más quita es en código con saltos y llamadas (`funciones`: 410 → 394; `control_ciclos`:
 178 → 170, con 3 inversiones de rama). En programas sin saltos `GetReg` ya deja pocas cargas de más, así que
 a veces solo cae una etiqueta; en modo ingenuo todos los programas quedan más cortos.

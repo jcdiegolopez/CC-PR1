@@ -8,6 +8,7 @@
 # Para casos nuevos: target/asm/<caso>[_ingenuo|_getreg][_opt].asm se compara con
 # src/test/resources/mips/<caso>.salida. Los aleatorios traen su .salida al lado.
 # MARS agrega una línea en blanco al final: se ignoran los espacios finales.
+# Sin DISPLAY y en modo headless: con un DISPLAY heredado que no abre (SSH, CI), MARS falla al iniciar Swing.
 set -u
 MARS="${1:-tools/Mars4_5.jar}"
 [ -f "$MARS" ] || { echo "No existe $MARS" >&2; exit 2; }
@@ -18,7 +19,7 @@ comparar() { # asm esperado
   if [ ! -f "$2" ]; then
     echo "SIN SALIDA ESPERADA $1"; return
   fi
-  obtenido=$(java -Dfile.encoding=UTF-8 -jar "$MARS" nc sm 1000000 "$1" 2>&1)
+  obtenido=$(env -u DISPLAY java -Djava.awt.headless=true -Dfile.encoding=UTF-8 -jar "$MARS" nc sm 1000000 "$1" 2>&1)
   if [ "$(printf '%s' "$obtenido" | sed -e 's/[[:space:]]*$//')" = "$(sed -e 's/[[:space:]]*$//' "$2")" ]; then
     ok=$((ok + 1)); echo "OK    $1"
   else

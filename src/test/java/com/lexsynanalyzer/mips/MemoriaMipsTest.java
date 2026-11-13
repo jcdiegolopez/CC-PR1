@@ -30,7 +30,8 @@ class MemoriaMipsTest {
     private static final Path CASOS = Path.of("src", "test", "resources", "mips");
     private static final Path SALIDA_ASM = Path.of("target", "asm");
     private static final List<String> EXITOSOS =
-            List.of("arreglos", "matriz", "foreach_string", "indice_string", "clases", "herencia", "try_indice");
+            List.of("arreglos", "matriz", "foreach_string", "indice_string", "clases", "constructor", "herencia",
+                    "herencia_constructor", "sobrescritura", "try_indice");
 
     static Stream<Arguments> exitosos() {
         return EXITOSOS.stream().flatMap(caso -> modos().map(modo -> Arguments.of(caso, modo.get()[0], modo.get()[1])));
