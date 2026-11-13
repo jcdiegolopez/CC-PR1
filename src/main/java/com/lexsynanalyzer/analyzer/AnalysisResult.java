@@ -23,7 +23,7 @@ import java.util.Objects;
  *
  * @param mips             ensamblador final para MARS, ya pasado por la mirilla
  * @param mipsSinOptimizar el mismo programa antes de la mirilla, para compararlos en la GUI
- * @param mirilla          veces que se aplicó cada regla de la mirilla, en orden de aparición
+ * @param mirilla          veces que se aplicó cada regla de la mirilla, en el orden de las reglas
  * @param falloMips        por qué no se pudo generar ensamblador para un programa sin errores (una
  *                         construcción que el backend no soporta, como los closures); {@code null} si no falló
  */

@@ -3,6 +3,7 @@ package com.lexsynanalyzer.analyzer;
 import com.lexsynanalyzer.mips.FabricaRegistros;
 import com.lexsynanalyzer.mips.GeneradorMIPS;
 import com.lexsynanalyzer.mips.ProgramaMips;
+import com.lexsynanalyzer.mips.mirilla.Mirilla;
 import com.lexsynanalyzer.parser.LexSynAnalyzerLexer;
 import com.lexsynanalyzer.parser.LexSynAnalyzerParser;
 import com.lexsynanalyzer.semantic.AnalizadorSemantico;
@@ -60,7 +61,9 @@ public final class LexSynAnalyzer {
         // Con cualquier error léxico, sintáctico o semántico no se genera código intermedio ni ensamblador.
         ProgramaTAC tac = ProgramaTAC.vacio();
         Layout layout = null;
-        ProgramaMips mips = ProgramaMips.vacio();
+        ProgramaMips mipsSinOptimizar = ProgramaMips.vacio();
+        ProgramaMips mips = mipsSinOptimizar;
+        Map<String, Integer> mirilla = Map.of();
         String falloMips = null;
         if (errores.isEmpty()) {
             layout = AsignadorMemoria.asignar(semantico.resultado());
@@ -68,15 +71,20 @@ public final class LexSynAnalyzer {
             // El ensamblador sale solo del TAC y del Layout, nunca del árbol sintáctico. Si el backend no
             // soporta una construcción válida (closures), el análisis y el TAC se conservan igual.
             try {
-                mips = new GeneradorMIPS(layout, FabricaRegistros.GETREG).generar(tac);
+                mipsSinOptimizar = new GeneradorMIPS(layout, FabricaRegistros.GETREG).generar(tac);
+                Mirilla.Resultado optimizado = new Mirilla().optimizar(mipsSinOptimizar);
+                mips = optimizado.programa();
+                mirilla = optimizado.aplicaciones();
             } catch (RuntimeException e) {
-                mips = ProgramaMips.vacio();
+                mipsSinOptimizar = ProgramaMips.vacio();
+                mips = mipsSinOptimizar;
+                mirilla = Map.of();
                 falloMips = e.getMessage();
             }
         }
 
         return new AnalysisResult(sinDuplicadosYOrdenados(errores), arbol, parser.getRuleNames(), tac, layout,
-                mips, mips, Map.of(), falloMips);
+                mips, mipsSinOptimizar, mirilla, falloMips);
     }
 
     private static List<AnalysisError> sinDuplicadosYOrdenados(List<AnalysisError> errores) {

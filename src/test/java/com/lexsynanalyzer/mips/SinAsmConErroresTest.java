@@ -51,7 +51,8 @@ class SinAsmConErroresTest {
 
         assertTrue(resultado.tieneMips());
         assertEquals(new GeneradorMIPS(resultado.layout(), FabricaRegistros.GETREG).generar(resultado.tac()).toString(),
-                resultado.mips().toString());
+                resultado.mipsSinOptimizar().toString());
+        assertTrue(SimuladorMips.ejecutar(resultado.mipsSinOptimizar().toString()).salida().startsWith("3"));
         assertTrue(SimuladorMips.ejecutar(resultado.mips().toString()).salida().startsWith("3"));
     }
 }

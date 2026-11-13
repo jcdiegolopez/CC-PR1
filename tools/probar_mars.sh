@@ -5,7 +5,7 @@
 #   bash tools/probar_mars.sh                 # usa tools/Mars4_5.jar
 #   bash tools/probar_mars.sh otro/Mars.jar
 #
-# Para casos nuevos: target/asm/<caso>[_ingenuo|_getreg].asm se compara con
+# Para casos nuevos: target/asm/<caso>[_ingenuo|_getreg][_opt].asm se compara con
 # src/test/resources/mips/<caso>.salida. Los aleatorios traen su .salida al lado.
 # MARS agrega una línea en blanco al final: se ignoran los espacios finales.
 set -u
@@ -29,7 +29,7 @@ comparar() { # asm esperado
 
 for asm in target/asm/*.asm; do
   [ -e "$asm" ] || { echo "No hay .asm en target/asm: corre mvn test primero" >&2; exit 2; }
-  caso=$(basename "$asm" .asm); caso=${caso%_ingenuo}; caso=${caso%_getreg}
+  caso=$(basename "$asm" .asm); caso=${caso%_opt}; caso=${caso%_ingenuo}; caso=${caso%_getreg}
   comparar "$asm" "src/test/resources/mips/$caso.salida"
 done
 for asm in target/asm/aleatorios/*.asm; do

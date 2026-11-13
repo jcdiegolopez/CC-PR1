@@ -68,6 +68,19 @@ public final class ProgramaMips {
         return Collections.unmodifiableList(texto);
     }
 
+    /**
+     * Programa con los mismos datos y rutinas pero con otro {@code .text}. La mirilla lo usa para devolver
+     * la versión optimizada sin tocar la original, que la GUI sigue mostrando como "sin optimizar".
+     */
+    public ProgramaMips conTexto(List<InstruccionMips> nuevoTexto) {
+        ProgramaMips copia = new ProgramaMips();
+        copia.cadenas.putAll(cadenas);
+        copia.datos.putAll(datos);
+        copia.rutinas.addAll(rutinas);
+        copia.texto.addAll(List.copyOf(nuevoTexto));
+        return copia;
+    }
+
     public void reemplazarTexto(List<InstruccionMips> nuevoTexto) {
         List<InstruccionMips> copia = List.copyOf(nuevoTexto);
         texto.clear();

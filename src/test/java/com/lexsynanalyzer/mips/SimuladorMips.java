@@ -211,6 +211,8 @@ final class SimuladorMips {
                 case "bnez" -> siguiente = valor(ins[1]) != 0 ? destino(ins[2]) : siguiente;
                 case "bltz" -> siguiente = valor(ins[1]) < 0 ? destino(ins[2]) : siguiente;
                 case "bgez" -> siguiente = valor(ins[1]) >= 0 ? destino(ins[2]) : siguiente;
+                case "blez" -> siguiente = valor(ins[1]) <= 0 ? destino(ins[2]) : siguiente;
+                case "bgtz" -> siguiente = valor(ins[1]) > 0 ? destino(ins[2]) : siguiente;
                 case "nop" -> {
                 }
                 case "syscall" -> {

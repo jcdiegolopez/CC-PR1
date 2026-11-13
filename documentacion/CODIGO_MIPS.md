@@ -4,7 +4,7 @@ El paquete `com.lexsynanalyzer.mips` traduce el TAC (ver `LENGUAJE_INTERMEDIO.md
 simulador **MARS 4.5**. El ensamblador sale **solo del TAC**: el generador nunca mira el árbol sintáctico.
 
 ```
-ProgramaTAC ──► GeneradorMIPS ──(un Traductor por op)──► ProgramaMips ──► .asm
+ProgramaTAC ──► GeneradorMIPS ──(un Traductor por op)──► ProgramaMips ──► Mirilla ──► .asm
                     │                                        ▲
                     └─ por función: ResolvedorUbicaciones ───┘  (dónde vive cada nombre)
                                     AsignadorRegistros        (en qué registro está)
@@ -24,6 +24,7 @@ ProgramaTAC ──► GeneradorMIPS ──(un Traductor por op)──► Program
 | `BloquesBasicos`, `Vida` | Bloques básicos y análisis de variables vivas / próximo uso. |
 | `TraductorMemoria` | `newarray`, `a[i]`, `a[i] = v`, `len`, `strlen`, `charat`, `new`, lectura y escritura de campos. |
 | `RuntimeMemoria` | `__alloc` y `__error_indice`. |
+| `mirilla.Mirilla`, `mirilla.Regla*` | Optimización por mirilla sobre la lista de `InstruccionMips` (§8). |
 
 `GeneradorMIPS(ubicaciones, FabricaRegistros.GETREG | FabricaRegistros.INGENUO)` elige el asignador.
 
@@ -248,3 +249,54 @@ Cómo conectan B y C sus traductores: `INTEGRACION_MIPS.md`.
 - Acceder a un campo o a una casilla de una referencia `null` no se chequea: MARS se detiene con un error
   de dirección inválida.
 - Los caracteres no ASCII (`ó`, `í`) dependen de que MARS lea el `.asm` como UTF-8.
+
+## 8. Optimización por mirilla
+
+`Mirilla.optimizar(programa)` trabaja sobre la lista de `InstruccionMips` del `.text`, nunca sobre texto.
+Devuelve un `ProgramaMips` nuevo (mismos `.data` y rutinas) y cuántas veces se aplicó cada regla; el original
+queda intacto para "Ver sin optimizar". Corre todas las reglas en orden y repite hasta que una pasada entera
+no cambie nada (tope de 100 pasadas), porque una regla abre oportunidades a otra.
+
+Regla de oro: la ventana **no cruza etiquetas**, porque a una etiqueta se puede llegar saltando y lo que se
+sabía antes ya no vale. Los comentarios sueltos sí se saltan. Las reglas de memoria solo miran dos
+instrucciones **seguidas** con la dirección escrita igual (`24($fp)`, `g_x`, `4($t8)`): no suponen nada sobre
+dos direcciones escritas distinto, así que un `jal` o un `sw` en medio corta la ventana.
+
+| # | Nombre en la GUI | Antes | Después |
+|---|---|---|---|
+| 1 | `move-redundante` | `move $x, $x` | (nada) |
+| 2 | `sw/lw` | `sw $r, M` · `lw $r, M` | `sw $r, M` |
+| | | `sw $r, M` · `lw $s, M` | `sw $r, M` · `move $s, $r` |
+| 3 | `acceso-redundante` | `lw $r, M` · `lw $r, M` | `lw $r, M` |
+| | | `lw $r, M` · `sw $r, M` | `lw $r, M` |
+| | | `sw $a, M` · `sw $b, M` | `sw $b, M` |
+| 4 | `salto-a-siguiente` | `j L` (o `beqz r, L`) · `L:` | `L:` |
+| 5 | `salto-a-salto` | `j L1` … `L1: j L2` | `j L2` … (también `beqz`/`bnez`/`bge`…) |
+| 6 | `codigo-inalcanzable` | `j`/`jr` · instrucciones · `L:` | `j`/`jr` · `L:` |
+| 7 | `identidad-algebraica` | `addiu $d, $s, 0`, `addu $d, $s, $zero`, `subu $d, $s, 0`, `mul $d, $s, 1` | `move $d, $s` (o nada si `$d = $s`) |
+| | | `mul $d, $s, 0` | `li $d, 0` |
+| 8 | `reduccion-de-fuerza` | `mul $d, $s, 2^k` | `sll $d, $s, k` |
+| 9 | `inversion-de-rama` | `beqz r, L1` · `j L2` · `L1:` | `bnez r, L2` · `L1:` |
+| 10 | `etiqueta-sin-uso` | `L:` que ninguna instrucción nombra | (nada); `main` se queda siempre |
+
+Detalles que hacen correcta cada regla:
+
+- **3:** en las dos primeras formas el registro base de `M` no puede ser `$r` (`lw $t0, 0($t0)` dos veces
+  avanza dos nodos de una lista).
+- **5:** se sigue la cadena entera de `j`; si es un ciclo (`L1: j L2`, `L2: j L1`) no se toca.
+- **6:** solo se borran instrucciones; los comentarios se quedan.
+- **7 y 8:** la constante puede ser un inmediato, `$zero` o un registro cargado con `li` **justo antes**
+  (es lo que produce `GetReg`: `li $t1, 4` · `mul $t2, $t0, $t1`). Ese `li` no se borra: el registro puede
+  usarse después. `sll` da los mismos 32 bits bajos que `mul` aunque haya desborde.
+- **10:** cuenta como uso cualquier operando (`j`, `b*`, `jal`, `la $t9, L0` del `try`). Al quitar la etiqueta
+  de una rutina de error que nadie llama, la regla 6 borra su cuerpo en la pasada siguiente.
+
+Efecto sobre los programas de `src/test/resources/mips` (modo `GETREG`, el del IDE): 3583 → 3513
+instrucciones. Donde más quita es en código con saltos y llamadas (`funciones`: 410 → 394; `control_ciclos`:
+178 → 170, con 3 inversiones de rama). En programas sin saltos `GetReg` ya deja pocas cargas de más, así que
+a veces solo cae una etiqueta; en modo ingenuo todos los programas quedan más cortos.
+
+Pruebas: `MirillaTest` (una por regla, lista de entrada → lista esperada, y el punto fijo), `MirillaMipsTest`
+(cada programa de prueba, optimizado, imprime lo mismo en los dos modos) y `ProgramasAleatoriosTest`, que
+corre los 300 programas aleatorios también después de la mirilla. `tools/probar_mars.sh` corre en MARS los
+`target/asm/*_opt.asm`.

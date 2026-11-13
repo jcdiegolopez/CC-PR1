@@ -1,5 +1,6 @@
 package com.lexsynanalyzer.mips;
 
+import com.lexsynanalyzer.mips.mirilla.Mirilla;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -24,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * <p>Los programas mezclan enteros (con desborde de 32 bits, división y módulo de negativos),
  * booleanos con cortocircuito, strings, ternarios, if/else, while, do-while, switch con fall-through,
  * break, continue, bloques que sombrean variables, llamadas a funciones (una recursiva y otra que
- * modifica una global) y expresiones muy anidadas que obligan a derramar registros.
+ * modifica una global) y expresiones muy anidadas que obligan a derramar registros. Cada programa se
+ * corre también después de la mirilla: ninguna regla puede cambiar lo que imprime.
  */
 class ProgramasAleatoriosTest {
 
@@ -48,6 +50,12 @@ class ProgramasAleatoriosTest {
             assertEquals(esperado, resultado.salida(),
                     () -> (modo == FabricaRegistros.GETREG ? "GETREG" : "INGENUO") + "\n" + fuente);
             assertEquals(0, resultado.codigoSalida());
+
+            SimuladorMips.Resultado optimizado = SimuladorMips.ejecutar(
+                    new Mirilla().optimizar(MipsDePrueba.compilar(fuente, modo)).programa().toString());
+            assertEquals(esperado, optimizado.salida(),
+                    () -> "MIRILLA " + (modo == FabricaRegistros.GETREG ? "GETREG" : "INGENUO") + "\n" + fuente);
+            assertEquals(0, optimizado.codigoSalida());
         }
     }
 

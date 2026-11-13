@@ -90,8 +90,8 @@ distintas, falta una de las llamadas de la tabla.
 
 ## 4. Persona C
 
-Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`), `TraductorMemoria` (puntos 1 y 2) y la conexión
-con el IDE (punto 5):
+Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`), `TraductorMemoria` (puntos 1 y 2), la mirilla
+(punto 3) y la conexión con el IDE (punto 5):
 
 - `LexSynAnalyzer` genera el MIPS con `GETREG` cuando no hay errores. `AnalysisResult` trae `mips`,
   `mipsSinOptimizar`, `mirilla` (veces por regla) y `falloMips`.
@@ -99,10 +99,10 @@ con el IDE (punto 5):
   se conservan; `falloMips` trae la causa y la pestaña MIPS la muestra.
 - Pestaña "Código Ensamblador (MIPS)" (`MipsPanel`): resaltado, "Ver sin optimizar", resumen de la mirilla,
   "Copiar" y "Guardar .asm" (UTF-8, nombre sugerido a partir del `.cps`).
-- Para enchufar la mirilla: en `LexSynAnalyzer`, pasar el programa optimizado como `mips`, el original como
-  `mipsSinOptimizar` y el conteo por regla como `mirilla`. La GUI no necesita cambios.
+- `LexSynAnalyzer` pasa el programa por `Mirilla`: `mips` es el optimizado, `mipsSinOptimizar` el original y
+  `mirilla` el conteo por regla. Las 10 reglas están en `CODIGO_MIPS.md` §8.
 
-Pendiente: mirilla y `EjecutorMars`.
+Pendiente: `EjecutorMars`.
 
 1. **`RuntimeMemoria`**: `registrarRutina("__alloc", ...)`. Recibe los bytes en `$a0` y devuelve la dirección
    en `$v0` (syscall 9). Solo puede usar `$a*`, `$v*`, `$t8` y `$t9`.
@@ -126,7 +126,8 @@ Pendiente: mirilla y `EjecutorMars`.
      `inc()` modifica la global `a`: después del `jal` hay que volver a leerla.
    - `sw`/`lw` sobre el heap (`k($t8)`, `0($v0)`) pueden apuntar a la misma dirección con otro registro base.
      Solo se eliminan con la misma dirección escrita igual **y** sin ningún `sw` ni `jal` en medio.
-   - No borres los comentarios `# derrame tN`: un test los busca y sirven para la defensa.
+   - Los comentarios `# derrame tN` se conservan en la versión sin optimizar (el test los busca ahí); en la
+     optimizada desaparecen si la mirilla quita el `sw` que los llevaba.
 4. **`EjecutorMars`**:
    - Comando: `java -Dfile.encoding=UTF-8 -jar tools/Mars4_5.jar nc sm 1000000 archivo.asm`.
    - Ignora los espacios y los saltos de línea al final de la salida.
