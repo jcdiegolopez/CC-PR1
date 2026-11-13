@@ -11,7 +11,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Corre un {@code .asm} en MARS 4.5 real, por consola, desde JUnit:
+ * Corre un {@code .asm} en MARS 4.5 real, por consola. Lo usan los tests ({@code EjecucionMarsTest}) y el
+ * botón "Ejecutar en MARS" del IDE:
  * {@code java -Djava.awt.headless=true -Dfile.encoding=UTF-8 -jar tools/Mars4_5.jar nc ae98 se99 sm <pasos> archivo.asm}.
  *
  * <ul>
@@ -26,18 +27,19 @@ import java.util.concurrent.TimeUnit;
  *   o 99, distinto del 0 normal y del 1 que deja {@code __lanzar} con {@code syscall 17}.</li>
  * </ul>
  * Además hay un tope de {@link #TIEMPO_MAXIMO_SEGUNDOS} por si MARS se queda esperando entrada.
- * Si {@code tools/Mars4_5.jar} no está, {@link #disponible()} es {@code false} y los tests se saltan.
+ * Si {@code tools/Mars4_5.jar} no está, {@link #disponible()} es {@code false}: los tests se saltan y el botón
+ * del IDE queda deshabilitado. La ruta es relativa a la carpeta desde la que se lanza el IDE ({@code mvn exec:java}).
  */
-final class EjecutorMars {
+public final class EjecutorMars {
 
-    static final Path JAR = Path.of("tools", "Mars4_5.jar");
-    static final int PASOS_MAXIMOS = 1_000_000;
-    static final long TIEMPO_MAXIMO_SEGUNDOS = 10;
-    static final int CODIGO_ERROR_ENSAMBLADO = 98;
-    static final int CODIGO_ERROR_EJECUCION = 99;
+    public static final Path JAR = Path.of("tools", "Mars4_5.jar");
+    public static final int PASOS_MAXIMOS = 1_000_000;
+    public static final long TIEMPO_MAXIMO_SEGUNDOS = 10;
+    public static final int CODIGO_ERROR_ENSAMBLADO = 98;
+    public static final int CODIGO_ERROR_EJECUCION = 99;
     private static final String AVISO_LIMITE = "Program terminated when maximum step limit";
 
-    enum Estado {
+    public enum Estado {
         /** El programa terminó solo ({@code syscall 10} o {@code 17}). */
         TERMINO,
         LIMITE_DE_PASOS,
@@ -50,21 +52,21 @@ final class EjecutorMars {
      * @param salida       lo que MARS escribió (stdout y stderr juntos), sin espacios al final
      * @param codigoSalida código de salida del proceso ({@code -1} si se mató por tiempo)
      */
-    record Resultado(String salida, int codigoSalida, Estado estado) {
+    public record Resultado(String salida, int codigoSalida, Estado estado) {
     }
 
     private EjecutorMars() {
     }
 
-    static boolean disponible() {
+    public static boolean disponible() {
         return Files.isRegularFile(JAR);
     }
 
-    static Resultado ejecutar(String asm) {
+    public static Resultado ejecutar(String asm) {
         return ejecutar(asm, PASOS_MAXIMOS);
     }
 
-    static Resultado ejecutar(String asm, int pasos) {
+    public static Resultado ejecutar(String asm, int pasos) {
         Path archivo = null;
         try {
             archivo = Files.createTempFile("compiscript", ".asm");
@@ -83,7 +85,7 @@ final class EjecutorMars {
         }
     }
 
-    static Resultado ejecutar(Path asm, int pasos) {
+    public static Resultado ejecutar(Path asm, int pasos) {
         if (!disponible()) {
             throw new IllegalStateException("No existe " + JAR.toAbsolutePath());
         }

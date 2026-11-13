@@ -1,5 +1,6 @@
 package com.lexsynanalyzer.gui;
 
+import com.lexsynanalyzer.mips.EjecutorMars;
 import com.lexsynanalyzer.mips.ProgramaMips;
 
 import javax.swing.*;
@@ -19,10 +20,13 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 /**
  * Pestaña "Código Ensamblador (MIPS)": muestra el {@code .asm} que se abre en MARS, permite compararlo con
- * la versión anterior a la mirilla, copiarlo y guardarlo. Con errores no hay ensamblador que mostrar.
+ * la versión anterior a la mirilla, copiarlo, guardarlo y correrlo en MARS 4.5 (si {@code tools/Mars4_5.jar}
+ * existe). Con errores no hay ensamblador que mostrar.
  */
 public class MipsPanel extends JPanel {
 
@@ -56,6 +60,7 @@ public class MipsPanel extends JPanel {
     private static final Color BANNER_ERROR_BG = new Color(0x3A, 0x1E, 0x1E);
     private static final Color BANNER_ERROR_FG = new Color(0xF8, 0x51, 0x49);
     private static final Color BANNER_ERROR_BORDER = new Color(0x6B, 0x2E, 0x2E);
+    private static final Color AVISO_FG = new Color(0xE5, 0xC0, 0x7B);
 
     private static final Font FUENTE_CODIGO = new Font("Consolas", Font.PLAIN, 14);
     private static final Font FUENTE_UI = new Font("Segoe UI", Font.PLAIN, 12);
@@ -70,14 +75,34 @@ public class MipsPanel extends JPanel {
     private final JToggleButton btnSinOptimizar;
     private final JButton btnCopiar;
     private final JButton btnGuardar;
+    private final JButton btnEjecutar;
     private final JTextPane codigo;
     private final JTextArea numerosDeLinea;
+    private final JSplitPane division;
+    private final JPanel consola;
+    private final JLabel lblConsola;
+    private final JTextArea salidaMars;
+
+    private final Function<String, EjecutorMars.Resultado> ejecutor;
+    private final boolean marsDisponible;
+    /** Cambia con cada programa mostrado: una ejecución que termina tarde no pisa la de otro programa. */
+    private int version;
 
     private String asmOptimizado = "";
     private String asmSinOptimizar = "";
     private String nombreSugerido = "programa";
 
     public MipsPanel() {
+        this(EjecutorMars::ejecutar, EjecutorMars.disponible());
+    }
+
+    /**
+     * @param ejecutor       corre un {@code .asm} y devuelve lo que imprimió MARS (los tests pasan uno falso)
+     * @param marsDisponible si es {@code false}, "Ejecutar en MARS" queda deshabilitado con la causa
+     */
+    MipsPanel(Function<String, EjecutorMars.Resultado> ejecutor, boolean marsDisponible) {
+        this.ejecutor = ejecutor;
+        this.marsDisponible = marsDisponible;
         setLayout(new BorderLayout(0, 8));
         setBackground(COLOR_BG);
 
@@ -113,11 +138,19 @@ public class MipsPanel extends JPanel {
         btnGuardar.setToolTipText("Guarda el ensamblador que se está viendo para abrirlo en MARS");
         btnGuardar.addActionListener(e -> elegirArchivoYGuardar());
 
+        btnEjecutar = new JButton("Ejecutar en MARS");
+        estilizar(btnEjecutar, COLOR_SECUNDARIO, COLOR_SECUNDARIO_HOVER, COLOR_GRID);
+        btnEjecutar.setToolTipText(marsDisponible
+                ? "Corre en MARS 4.5 el ensamblador que se está viendo y muestra su salida abajo"
+                : "No se encontró " + EjecutorMars.JAR + ": abra el IDE desde la carpeta del proyecto");
+        btnEjecutar.addActionListener(e -> ejecutarEnMars());
+
         JPanel acciones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         acciones.setOpaque(false);
         acciones.add(lblAccion);
         acciones.add(btnSinOptimizar);
         acciones.add(btnCopiar);
+        acciones.add(btnEjecutar);
         acciones.add(btnGuardar);
 
         JPanel barra = new JPanel(new BorderLayout(12, 0));
@@ -156,7 +189,40 @@ public class MipsPanel extends JPanel {
         scrollPane.setRowHeaderView(numerosDeLinea);
         scrollPane.getViewport().setBackground(COLOR_BG);
         scrollPane.setBorder(BorderFactory.createLineBorder(COLOR_GRID, 1));
-        add(scrollPane, BorderLayout.CENTER);
+
+        lblConsola = new JLabel(" ");
+        lblConsola.setFont(FUENTE_BOTON);
+        lblConsola.setForeground(COLOR_TEXT);
+        lblConsola.setBorder(new EmptyBorder(6, 12, 6, 12));
+        lblConsola.setOpaque(true);
+        lblConsola.setBackground(COLOR_HEADER);
+
+        salidaMars = new JTextArea();
+        salidaMars.setEditable(false);
+        salidaMars.setBackground(COLOR_BG);
+        salidaMars.setForeground(COLOR_TEXT);
+        salidaMars.setCaretColor(Color.WHITE);
+        salidaMars.setFont(FUENTE_CODIGO);
+        salidaMars.setMargin(new Insets(6, 12, 6, 12));
+        JScrollPane scrollSalida = new JScrollPane(salidaMars);
+        scrollSalida.setBorder(BorderFactory.createEmptyBorder());
+        scrollSalida.getViewport().setBackground(COLOR_BG);
+
+        consola = new JPanel(new BorderLayout());
+        consola.setBackground(COLOR_BG);
+        consola.setBorder(BorderFactory.createLineBorder(COLOR_GRID, 1));
+        consola.add(lblConsola, BorderLayout.NORTH);
+        consola.add(scrollSalida, BorderLayout.CENTER);
+        consola.setMinimumSize(new Dimension(0, 80));
+        consola.setVisible(false);
+
+        division = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollPane, consola);
+        division.setResizeWeight(0.7);
+        division.setBorder(BorderFactory.createEmptyBorder());
+        division.setDividerSize(6);
+        division.setContinuousLayout(true);
+        division.setBackground(COLOR_BG);
+        add(division, BorderLayout.CENTER);
 
         limpiar();
     }
@@ -182,6 +248,11 @@ public class MipsPanel extends JPanel {
 
         btnSinOptimizar.setSelected(false);
         btnSinOptimizar.setText(TEXTO_VER_SIN_OPTIMIZAR);
+        version++;
+        btnEjecutar.setText("Ejecutar en MARS");
+        consola.setVisible(false);
+        salidaMars.setText("");
+        lblConsola.setText(" ");
         habilitarAcciones(true);
         pintarCodigo();
     }
@@ -239,6 +310,87 @@ public class MipsPanel extends JPanel {
         return btnGuardar.isEnabled();
     }
 
+    public boolean ejecutarHabilitado() {
+        return btnEjecutar.isEnabled();
+    }
+
+    /** Lo que imprimió la última ejecución en MARS ({@code ""} si no se ha corrido este programa). */
+    public String getSalidaMars() {
+        return salidaMars.getText();
+    }
+
+    /** Línea de estado de la última ejecución: cómo terminó, con qué código y cuánto tardó. */
+    public String getEstadoMars() {
+        return lblConsola.getText();
+    }
+
+    /**
+     * Corre en MARS el ensamblador visible, fuera del hilo de Swing (MARS tarda unos cientos de
+     * milisegundos en arrancar y puede llegar al tope de {@link EjecutorMars#TIEMPO_MAXIMO_SEGUNDOS}).
+     */
+    public SwingWorker<EjecutorMars.Resultado, Void> ejecutarEnMars() {
+        String asm = asmVisible();
+        String cual = btnSinOptimizar.isSelected() ? "versión sin optimizar" : "versión optimizada";
+        int ejecucion = version;
+        long inicio = System.nanoTime();
+        btnEjecutar.setEnabled(false);
+        btnEjecutar.setText("Ejecutando…");
+        lblAccion.setText(" ");
+        consola.setVisible(true);
+        division.setDividerLocation(0.6);
+        estadoConsola("Ejecutando la " + cual + " en MARS…", COLOR_TEXT_SECUNDARIO);
+        salidaMars.setText("");
+
+        SwingWorker<EjecutorMars.Resultado, Void> trabajo = new SwingWorker<>() {
+            @Override
+            protected EjecutorMars.Resultado doInBackground() {
+                return ejecutor.apply(asm);
+            }
+
+            @Override
+            protected void done() {
+                if (ejecucion != version) {
+                    return;
+                }
+                btnEjecutar.setText("Ejecutar en MARS");
+                btnEjecutar.setEnabled(true);
+                try {
+                    mostrarResultadoMars(get(), cual, (System.nanoTime() - inicio) / 1_000_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    Throwable causa = e.getCause() == null ? e : e.getCause();
+                    estadoConsola("No se pudo ejecutar MARS: " + causa.getMessage(), BANNER_ERROR_FG);
+                }
+            }
+        };
+        trabajo.execute();
+        return trabajo;
+    }
+
+    void mostrarResultadoMars(EjecutorMars.Resultado resultado, String cual, long milisegundos) {
+        salidaMars.setText(resultado.salida());
+        salidaMars.setCaretPosition(0);
+        String tiempo = String.format("%.1f s", milisegundos / 1000.0);
+        switch (resultado.estado()) {
+            case TERMINO -> estadoConsola(String.format("MARS · %s · terminó con código %d · %s", cual,
+                    resultado.codigoSalida(), tiempo), resultado.codigoSalida() == 0 ? BANNER_SUCCESS_FG : AVISO_FG);
+            case LIMITE_DE_PASOS -> estadoConsola(String.format(
+                    "MARS · %s · se detuvo al llegar a %,d instrucciones (¿ciclo infinito?)", cual,
+                    EjecutorMars.PASOS_MAXIMOS), AVISO_FG);
+            case ERROR_ENSAMBLADO -> estadoConsola("MARS · " + cual + " · no se pudo ensamblar", BANNER_ERROR_FG);
+            case ERROR_EJECUCION -> estadoConsola("MARS · " + cual + " · error en tiempo de ejecución",
+                    BANNER_ERROR_FG);
+            case TIEMPO_AGOTADO -> estadoConsola(String.format("MARS · %s · no terminó en %d s y se canceló", cual,
+                    EjecutorMars.TIEMPO_MAXIMO_SEGUNDOS), AVISO_FG);
+        }
+    }
+
+    private void estadoConsola(String texto, Color color) {
+        lblConsola.setText(texto);
+        lblConsola.setForeground(color);
+    }
+
     static String resumenMirilla(int eliminadas, Map<String, Integer> reglas) {
         if (reglas.isEmpty()) {
             return "Mirilla: no aplicó ninguna transformación.";
@@ -254,6 +406,11 @@ public class MipsPanel extends JPanel {
     }
 
     private void vaciar() {
+        version++;
+        btnEjecutar.setText("Ejecutar en MARS");
+        consola.setVisible(false);
+        salidaMars.setText("");
+        lblConsola.setText(" ");
         asmOptimizado = "";
         asmSinOptimizar = "";
         btnSinOptimizar.setSelected(false);
@@ -267,10 +424,12 @@ public class MipsPanel extends JPanel {
     }
 
     private void habilitarAcciones(boolean habilitadas) {
-        for (AbstractButton boton : new AbstractButton[]{btnSinOptimizar, btnCopiar, btnGuardar}) {
-            boton.setEnabled(habilitadas);
-            boton.setCursor(habilitadas ? new Cursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+        for (AbstractButton boton : new AbstractButton[]{btnSinOptimizar, btnCopiar, btnGuardar, btnEjecutar}) {
+            boolean activo = habilitadas && (boton != btnEjecutar || marsDisponible);
+            boton.setEnabled(activo);
+            boton.setCursor(activo ? new Cursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
         }
+        btnEjecutar.setBackground(habilitadas && marsDisponible ? COLOR_SECUNDARIO : COLOR_DISABLED_BUTTON);
         btnGuardar.setBackground(habilitadas ? COLOR_ACCENT : COLOR_DISABLED_BUTTON);
         btnGuardar.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(habilitadas ? COLOR_ACCENT_BORDER : COLOR_GRID, 1),

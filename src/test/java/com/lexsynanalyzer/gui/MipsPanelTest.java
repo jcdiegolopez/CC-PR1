@@ -2,6 +2,7 @@ package com.lexsynanalyzer.gui;
 
 import com.lexsynanalyzer.analyzer.AnalysisResult;
 import com.lexsynanalyzer.analyzer.LexSynAnalyzer;
+import com.lexsynanalyzer.mips.EjecutorMars;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,10 +11,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+
+import javax.swing.SwingUtilities;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class MipsPanelTest {
 
@@ -91,5 +98,121 @@ class MipsPanelTest {
     void elNumeralDentroDeUnStringNoAbreComentario() {
         assertEquals(-1, MipsPanel.inicioComentario("str0: .asciiz \"a # b\""));
         assertEquals(14, MipsPanel.inicioComentario("    li $t0, 1 # x"));
+    }
+
+    // --- Ejecutar en MARS ---
+
+    @Test
+    void ejecutarEnMars_muestraLaSalidaYComoTermino() throws Exception {
+        MipsPanel panel = new MipsPanel(asm -> new EjecutorMars.Resultado("hola\n3", 0, EjecutorMars.Estado.TERMINO),
+                true);
+        mostrar(panel);
+
+        panel.ejecutarEnMars().get(5, TimeUnit.SECONDS);
+        esperar(() -> panel.getEstadoMars().startsWith("MARS"));
+
+        assertEquals("hola\n3", panel.getSalidaMars());
+        assertTrue(panel.getEstadoMars().contains("versión optimizada"), panel.getEstadoMars());
+        assertTrue(panel.getEstadoMars().contains("terminó con código 0"), panel.getEstadoMars());
+        assertTrue(panel.ejecutarHabilitado());
+    }
+
+    @Test
+    void ejecutarEnMars_correLaVersionQueSeEstaViendo() throws Exception {
+        String[] recibido = new String[1];
+        MipsPanel panel = new MipsPanel(asm -> {
+            recibido[0] = asm;
+            return new EjecutorMars.Resultado("", 0, EjecutorMars.Estado.TERMINO);
+        }, true);
+        AnalysisResult resultado = mostrar(panel);
+        panel.setMostrarSinOptimizar(true);
+
+        panel.ejecutarEnMars().get(5, TimeUnit.SECONDS);
+        esperar(() -> panel.getEstadoMars().startsWith("MARS"));
+
+        assertEquals(resultado.mipsSinOptimizar().toString(), recibido[0]);
+        assertTrue(panel.getEstadoMars().contains("versión sin optimizar"), panel.getEstadoMars());
+    }
+
+    @Test
+    void ejecutarEnMars_avisaElLimiteDePasosYLosErrores() {
+        MipsPanel panel = new MipsPanel(asm -> null, true);
+        mostrar(panel);
+
+        panel.mostrarResultadoMars(new EjecutorMars.Resultado("", 0, EjecutorMars.Estado.LIMITE_DE_PASOS),
+                "versión optimizada", 1200);
+        assertTrue(panel.getEstadoMars().contains("ciclo infinito"), panel.getEstadoMars());
+
+        panel.mostrarResultadoMars(new EjecutorMars.Resultado("Error...", 99, EjecutorMars.Estado.ERROR_EJECUCION),
+                "versión optimizada", 300);
+        assertTrue(panel.getEstadoMars().contains("error en tiempo de ejecución"), panel.getEstadoMars());
+        assertEquals("Error...", panel.getSalidaMars());
+    }
+
+    @Test
+    void sinMarsElBotonQuedaDeshabilitado() {
+        MipsPanel panel = new MipsPanel(asm -> null, false);
+        mostrar(panel);
+
+        assertTrue(panel.accionesHabilitadas());
+        assertFalse(panel.ejecutarHabilitado());
+    }
+
+    @Test
+    void unaEjecucionQueTerminaDespuesDeCambiarDeProgramaSeDescarta() throws Exception {
+        CountDownLatch soltar = new CountDownLatch(1);
+        MipsPanel panel = new MipsPanel(asm -> {
+            try {
+                soltar.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return new EjecutorMars.Resultado("viejo", 0, EjecutorMars.Estado.TERMINO);
+        }, true);
+        mostrar(panel);
+        var trabajo = panel.ejecutarEnMars();
+
+        mostrar(panel);
+        soltar.countDown();
+        trabajo.get(5, TimeUnit.SECONDS);
+        SwingUtilities.invokeAndWait(() -> { });
+        SwingUtilities.invokeAndWait(() -> { });
+
+        assertEquals("", panel.getSalidaMars());
+        assertTrue(panel.ejecutarHabilitado());
+    }
+
+    @Test
+    void ejecutarEnMarsReal() throws Exception {
+        assumeTrue(EjecutorMars.disponible(), "No está " + EjecutorMars.JAR);
+        MipsPanel panel = new MipsPanel();
+        AnalysisResult resultado = LexSynAnalyzer.analizarTexto("print(1 + 2);");
+        panel.mostrarMips(resultado.mips(), resultado.mipsSinOptimizar(), resultado.mirilla(), "suma");
+
+        panel.ejecutarEnMars().get(15, TimeUnit.SECONDS);
+        esperar(() -> panel.getEstadoMars().startsWith("MARS"));
+
+        assertEquals("3", panel.getSalidaMars());
+        assertTrue(panel.getEstadoMars().contains("código 0"), panel.getEstadoMars());
+    }
+
+    private static AnalysisResult mostrar(MipsPanel panel) {
+        AnalysisResult resultado = LexSynAnalyzer.analizarTexto(PROGRAMA);
+        panel.mostrarMips(resultado.mips(), resultado.mipsSinOptimizar(), resultado.mirilla(), "saludo");
+        return resultado;
+    }
+
+    /** {@code done()} del SwingWorker corre en el hilo de Swing poco después de que {@code get()} vuelve. */
+    private static void esperar(BooleanSupplier condicion) throws Exception {
+        long limite = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < limite) {
+            boolean[] listo = new boolean[1];
+            SwingUtilities.invokeAndWait(() -> listo[0] = condicion.getAsBoolean());
+            if (listo[0]) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        throw new AssertionError("La ejecución en MARS no terminó a tiempo");
     }
 }
