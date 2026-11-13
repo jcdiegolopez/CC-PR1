@@ -90,6 +90,9 @@ distintas, falta una de las llamadas de la tabla.
 
 ## 4. Persona C
 
+Ya integrado: `RuntimeMemoria` (`__alloc`, `__error_indice`) y `TraductorMemoria` (puntos 1 y 2).
+Pendiente: mirilla, `EjecutorMars` y la conexión con `LexSynAnalyzer` y la GUI.
+
 1. **`RuntimeMemoria`**: `registrarRutina("__alloc", ...)`. Recibe los bytes en `$a0` y devuelve la dirección
    en `$v0` (syscall 9). Solo puede usar `$a*`, `$v*`, `$t8` y `$t9`.
 2. **`TraductorMemoria`** (`newarray`, `aload`, `astore`, `len`, `strlen`, `charat`, `new`, `fload`, `fstore`).

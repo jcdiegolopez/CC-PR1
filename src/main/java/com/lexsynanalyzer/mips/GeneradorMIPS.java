@@ -77,6 +77,7 @@ public final class GeneradorMIPS {
         TraductorLlamadas.registrarEn(this);
         TraductorExcepciones.registrarEn(this);
         RuntimeErrores.registrarEn(this);
+        TraductorMemoria.registrarEn(this);
     }
 
     /** Registra (o reemplaza) el traductor de {@code op}. */

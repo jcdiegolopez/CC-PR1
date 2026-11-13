@@ -22,6 +22,8 @@ ProgramaTAC ──► GeneradorMIPS ──(un Traductor por op)──► Program
 | `RegistrosIngenuos` | Implementación de referencia: carga y guarda en cada instrucción. |
 | `GetReg` | `getReg` del Dragon Book con descriptores, derrame y variables vivas. |
 | `BloquesBasicos`, `Vida` | Bloques básicos y análisis de variables vivas / próximo uso. |
+| `TraductorMemoria` | `newarray`, `a[i]`, `a[i] = v`, `len`, `strlen`, `charat`, `new`, lectura y escritura de campos. |
+| `RuntimeMemoria` | `__alloc` y `__error_indice`. |
 
 `GeneradorMIPS(ubicaciones, FabricaRegistros.GETREG | FabricaRegistros.INGENUO)` elige el asignador.
 
@@ -54,6 +56,20 @@ a vaciar `$t0`–`$t7`.
 | `print a` · `prints a` · `printb a` | syscall 1 · syscall 4 · `jal __print_bool`; después `'\n'` (syscall 11) |
 | `t = concat a, b` | `$a0, $a1 ← a, b` · `jal __concat` · `t ← $v0` |
 | `t = streq a, b` · `strne` | `jal __streq` · `t ← $v0` (`strne`: `xori t, $v0, 1`) |
+| `t = newarray n` | `sll $a0, n, 2` · `addiu $a0, $a0, 4` · `jal __alloc` · `sw n, 0($v0)` · `t ← $v0` |
+| `t = a[i]` | `bltz i, __error_indice` · `lw $t8, 0(a)` · `bge i, $t8, __error_indice` · `sll $t8, i, 2` · `addu $t8, $t8, a` · `lw t, 4($t8)` |
+| `a[i] = v` | El mismo chequeo y dirección · `sw v, 4($t8)` |
+| `t = len a` | `lw t, 0(a)` |
+| `t = strlen s` | `jal __strlen` (`s` en `$a0`) · `t ← $v0` |
+| `t = charat s, i` | `bltz i, __error_indice` · `jal __strlen` · `bge i, $v0, __error_indice` · `jal __charat` · `t ← $v0` |
+| `t = new C, size` | `li $a0, size` · `jal __alloc` · `t ← $v0` |
+| `t = obj.campo @k` · `obj.campo @k = v` | `lw t, k(obj)` · `sw v, k(obj)` |
+
+Un arreglo es la dirección de un bloque del heap `[longitud][e0][e1]…`, una palabra por casilla; una matriz
+es un arreglo de referencias a arreglos. Un objeto es un bloque de `size` bytes y cada campo está en el
+offset que fijó `AsignadorMemoria` (los campos del padre van primero, así que un método heredado funciona
+igual sobre un objeto hijo). Los accesos con índice llaman antes a `antesDePosibleExcepcion()`, para que un
+`catch` lea de memoria valores al día.
 
 Los booleanos son `0`/`1`, así que las comparaciones de MARS ya dan un booleano válido y `!` es un `xor`
 con 1. `div` trunca hacia cero, igual que Compiscript: `-17 / 5 = -3`, `-17 % 5 = -2`.
@@ -170,6 +186,8 @@ misma salida (`EjecucionMipsTest`). Si `GetReg` tuviera un error, la salida ser�
 | `__charat` | `$a0` = s, `$a1` = i → `$v0` = string nuevo de 1 carácter. No valida `i`. |
 | `__print_bool` | `$a0` = 0/1 → imprime `false`/`true`. |
 | `__error_div0` | Carga `"División entre cero"` en `$a0` y salta a `__lanzar`. |
+| `__alloc` | `$a0` = bytes → `$v0` = bloque nuevo (`sbrk`, redondeado a 4 bytes). MARS lo entrega en cero, así que los campos sin inicializador valen `0`/`null`. |
+| `__error_indice` | Carga `"Índice fuera de rango"` en `$a0` y salta a `__lanzar`. |
 
 Cada rutina se emite **una vez** y solo si el programa la usa (`ProgramaMips.requerir`).
 
@@ -187,6 +205,10 @@ Los prólogos/epílogos, `param`/`call`/`return` y el trazado opcional de funcio
 - `EjecucionMipsTest`: `variables`, `aritmetica`, `logicas`, `control_if`, `control_ciclos` (while,
   do-while, for, break, continue, ciclos anidados), `control_switch` (con fall-through), `strings`,
   `registros_derrame`, `funciones`, `bloques`, `literales` y `division_cero`, en los dos modos.
+- `MemoriaMipsTest`: `arreglos`, `matriz`, `foreach_string`, `clases`, `herencia` (tres niveles, campo,
+  método y constructor heredados, sobrescritura), `try_indice` (el error ocurre dentro de una función) y
+  `error_indice` (sin `try`: mensaje y código 1), en los dos modos. `indice_string` lee `s[i]`, también
+  sobre un elemento de un arreglo de strings y fuera de rango dentro de un `try`.
 - `ProgramasAleatoriosTest`: **prueba diferencial**. 300 programas aleatorios (semilla fija) con enteros
   que desbordan, booleanos con cortocircuito, strings, ternarios, if/else, while, do-while, switch,
   break, continue, bloques que sombrean variables, llamadas (una función recursiva y otra que modifica
@@ -222,6 +244,7 @@ Cómo conectan B y C sus traductores: `INTEGRACION_MIPS.md`.
   el desborde de `addu` y `mul`.
 - `print` de un arreglo u objeto imprime su dirección.
 - Un parámetro sin tipo anotado se trata como entero; los parámetros string requieren anotación explícita.
-- `charat` no valida el índice. La comprobación y el lanzamiento de excepciones por índices de arreglos
-  pertenecen a la persona C.
+- Los strings son inmutables: `s[i]` se puede leer (es `charat`), pero `s[i] = v` es un error semántico.
+- Acceder a un campo o a una casilla de una referencia `null` no se chequea: MARS se detiene con un error
+  de dirección inválida.
 - Los caracteres no ASCII (`ó`, `í`) dependen de que MARS lea el `.asm` como UTF-8.
